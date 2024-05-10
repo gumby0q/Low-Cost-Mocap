@@ -12,14 +12,20 @@
 #define ROTOR_RADIUS 0.0225
 #define Z_GAIN 0.7
 
-#define DRONE_INDEX 1
+#define DRONE_INDEX 0
 
 #define EEPROM_SIZE 4
 
 unsigned long lastPing;
+uint64_t millisFromStart = 0;
+uint64_t millisFromArm = 0;
+
+#define DELAY_TO_ARM (uint64_t)(1500)
 
 bfs::SbusTx sbus_tx(&Serial1, 33, 32, true, false);
 bfs::SbusData data;
+
+uint16_t zBase = 173;
 
 bool armed = false;
 unsigned long timeArmed = 0;
@@ -50,6 +56,10 @@ double zVelSetpoint, zVel, zVelOutput;
 double xyVelKp = 0.2, xyVelKi = 0.03, xyVelKd = 0.05;
 double zVelKp = 0.3, zVelKi = 0.1, zVelKd = 0.05;
 
+// PID::PID(double* Input, double* Output, double* Setpoint,
+//         double Kp, double Ki, double Kd, int ControllerDirection)
+//     :PID::PID(Input, Output, Setpoint, Kp, Ki, Kd, P_ON_E, ControllerDirection)
+
 PID xPosPID(&xPos, &xVelSetpoint, &xPosSetpoint, xyPosKp, xyPosKi, xyPosKd, DIRECT);
 PID yPosPID(&yPos, &yVelSetpoint, &yPosSetpoint, xyPosKp, xyPosKi, xyPosKd, DIRECT);
 PID zPosPID(&zPos, &zVelSetpoint, &zPosSetpoint, zPosKp, zPosKi, zPosKd, DIRECT);
@@ -62,6 +72,8 @@ PID zVelPID(&zVel, &zVelOutput, &zVelSetpoint, zVelKp, zVelKi, zVelKd, DIRECT);
 
 unsigned long lastLoopTime = micros();
 unsigned long lastSbusSend = micros();
+unsigned long lastPrint = micros();
+
 float loopFrequency = 2000.0;
 float sbusFrequency = 50.0;
 
@@ -75,6 +87,8 @@ float sbusFrequency = 50.0;
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
   // Serial.println((char*)incomingData);
   DeserializationError err = deserializeJson(json, (char *)incomingData);
+
+  Serial.println("\n incoming packet \n");
 
   if (err) {
     Serial.print("failed to parse json");
@@ -94,7 +108,9 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     if (json["armed"] != armed && json["armed"]) {
       timeArmed = millis();
     }
+    // Serial.printf("\narmed 1 %d \n", (uint8_t)armed);
     armed = json["armed"];
+    // Serial.printf("\narmed 2 %d \n", (uint8_t)armed);
   } else if (json.containsKey("setpoint")) {
     xPosSetpoint = json["setpoint"][0];
     yPosSetpoint = json["setpoint"][1];
@@ -136,14 +152,27 @@ void setup() {
   data.ch17 = true;
   data.ch18 = true;
   data.lost_frame = false;
-  for (int i = 500; i > 172; i--) {
+  // for (int i = 500; i > 172; i--) {
+    // for (int j = 0; j < 16; j++) {
+    //   data.ch[j] = i;
+    // }
+    // Serial.println(i);
+    // sbus_tx.data(data);
+    // sbus_tx.Write();
+  // }
+
     for (int j = 0; j < 16; j++) {
-      data.ch[j] = i;
+      data.ch[j] = 173;
     }
-    Serial.println(i);
-    sbus_tx.data(data);
-    sbus_tx.Write();
-  }
+
+  data.ch[0] = 992;
+  data.ch[1] = 992;
+  data.ch[2] = 173;
+  data.ch[3] = 992;
+
+  sbus_tx.data(data);
+  sbus_tx.Write();
+  
 
   // Set device as a Wi-Fi Station
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -204,7 +233,11 @@ void setup() {
   lastPing = micros();
   lastLoopTime = micros();
   lastSbusSend = micros();
+
+  // delay(2000);
+  millisFromStart = micros()/1000;
 }
+
 
 void loop() {
   while (micros() - lastLoopTime < 1e6 / loopFrequency) { yield(); }
@@ -215,8 +248,15 @@ void loop() {
   }
 
   if (armed) {
-    data.ch[4] = 1800;
+    data.ch[4] = 1812;
+    // if ((micros()/1000 - millisFromStart) > DELAY_TO_ARM) {
+    //   data.ch[4] = 1811;
+    // }
   } else {
+    /* reset if not armed */
+    millisFromArm = micros()/1000;
+
+    // zBase = 173;
     data.ch[4] = 172;
     resetPid(xPosPID, -MAX_VEL, MAX_VEL);
     resetPid(yPosPID, -MAX_VEL, MAX_VEL);
@@ -226,6 +266,13 @@ void loop() {
     resetPid(yVelPID, -1, 1);
     resetPid(zVelPID, -1, 1);
   }
+
+  if ((micros()/1000 - millisFromArm) > /* delay*/ 1000) {
+    zBase = 992;
+  } else {
+    zBase = 173;
+  }
+
 
   xPosPID.Compute();
   yPosPID.Compute();
@@ -237,15 +284,42 @@ void loop() {
   zVelPID.Compute();
   int xPWM = 992 + (xVelOutput * 811) + xTrim;
   int yPWM = 992 + (yVelOutput * 811) + yTrim;
-  int zPWM = 992 + (Z_GAIN * zVelOutput * 811) + zTrim;
+  // int zPWM = 992 + (Z_GAIN * zVelOutput * 811) + zTrim;
+  int16_t zPWMshift = (Z_GAIN * zVelOutput * 811);
+  int zPWM = zBase + zPWMshift + zTrim;
   int yawPWM = 992 + (yawPosOutput * 811) + yawTrim;
   double groundEffectMultiplier = 1 - groundEffectCoef*pow(((2*ROTOR_RADIUS) / (4*(zPos-groundEffectOffset))), 2);
   zPWM *= max(0., groundEffectMultiplier);
-  zPWM = armed && millis() - timeArmed > 100 ? zPWM : 172;
+  zPWM = (armed && millis() - timeArmed) > 100 ? zPWM : 172;
   data.ch[0] = -yPWM;
   data.ch[1] = xPWM;
   data.ch[2] = zPWM;
   data.ch[3] = yawPWM;
+
+  // my hack test <<
+  // data.ch[0] = 992;
+  // data.ch[1] = 992;
+  // data.ch[2] = 173; // trottle
+  // data.ch[3] = 992;
+  // data.ch[4] = 173; // arm
+  // data.ch[5] = 173; // angle off
+  data.ch[5] = 1811; // angle on
+  // if ((micros()/1000 - millisFromStart) > DELAY_TO_ARM) {
+  //   data.ch[4] = 1811;
+  // }
+  // my hack test <<
+
+
+  if (micros() - lastPrint > 2e6/3) {
+    lastPrint = micros();
+    if (armed) {
+      // Serial.printf("\narmed 3 yes %d %u %d zBase %d \n", (uint8_t)armed, data.ch[4], zVelOutput * 100, zBase);
+      Serial.printf("\narmed 3 yes %d zBase %d zPWM %d zPWMshift %d\n", (uint8_t)armed, zBase, zPWM, zPWMshift);
+    } else {
+      Serial.printf("\narmed 3 no  %d zBase %d zPWM %d zPWMshift %d\n", (uint8_t)armed, zBase, zPWM, zPWMshift);
+    }
+  }
+
 
   if (micros() - lastSbusSend > 1e6 / sbusFrequency) {
     lastSbusSend = micros();
@@ -258,3 +332,4 @@ void loop() {
     sbus_tx.Write();
   }
 }
+

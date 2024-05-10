@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEventHandler, useState, createRef, Ref, useRef, useEffect } from 'react';
+import { FormEventHandler, useState, createRef, Ref, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Button, Card, Col, Container, Row } from 'react-bootstrap';
 import Toolbar from './components/Toolbar';
 import Form from 'react-bootstrap/Form';
@@ -19,6 +19,67 @@ import TrajectoryPlanningSetpoints from './components/TrajectoryPlanningSetpoint
 const TRAJECTORY_PLANNING_TIMESTEP = 0.05
 const LAND_Z_HEIGHT = 0.075
 const NUM_DRONES = 2
+
+
+
+class LocalStorageAPI {
+  // Save an item to local storage
+  static setItem(key: string, value: any) {
+    try {
+      const serializedValue = JSON.stringify(value);
+      localStorage.setItem(key, serializedValue);
+    } catch (error) {
+      console.error("Error saving data to local storage", error);
+    }
+  }
+
+  // Retrieve an item from local storage
+  static getItem(key: string) {
+    try {
+      const serializedValue = localStorage.getItem(key);
+      return serializedValue ? JSON.parse(serializedValue) : null;
+    } catch (error) {
+      console.error("Error retrieving data from local storage", error);
+      return null;
+    }
+  }
+
+  // Remove an item from local storage
+  static removeItem(key: string) {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error("Error removing data from local storage", error);
+    }
+  }
+
+  // Clear all local storage
+  static clear() {
+    try {
+      localStorage.clear();
+    } catch (error) {
+      console.error("Error clearing local storage", error);
+    }
+  }
+}
+
+
+// const [data, setData] = useState('');
+
+// // Load data from local storage on component mount
+// useEffect(() => {
+//   const storedData = LocalStorageAPI.getItem('myData');
+//   if (storedData) {
+//     setData(storedData);
+//   }
+// }, []);
+
+// // Function to handle data change
+// const handleDataChange = (newData) => {
+//   setData(newData);
+//   LocalStorageAPI.setItem('myData', newData);
+// };
+
 
 export default function App() {
   const [cameraStreamRunning, setCameraStreamRunning] = useState(false);
@@ -60,6 +121,9 @@ export default function App() {
   const [trajectoryPlanningWaypoints, setTrajectoryPlanningWaypoints] = useState("[\n[0.2,0.2,0.6,0,0,0.8,true],\n[-0.2,0.2,0.6,0.2,0.2,0.6,true],\n[-0.2,-0.2,0.5,0,0,0.4,true],\n[0.2,-0.2,0.5,-0.2,-0.2,0.6,true],\n[0.2,0.2,0.5,0,0,0.8,true]\n]")
   const [trajectoryPlanningSetpoints, setTrajectoryPlanningSetpoints] = useState<number[][][]>([])
   const [trajectoryPlanningRunStartTimestamp, setTrajectoryPlanningRunStartTimestamp] = useState(0)
+
+  const [droneUICoordinates, setDroneUICoordinates] = useState('')
+  // const [droneDestinationUICoordinates, setDroneDestinationUICoordinates] = useState('')
 
   const updateCameraSettings: FormEventHandler = (e) => {
     e.preventDefault()
@@ -224,18 +288,32 @@ export default function App() {
   }, [motionPreset, droneSetpoint, trajectoryPlanningRunStartTimestamp])
 
   useEffect(() => {
-    socket.on("to-world-coords-matrix", (data) => {
-      setToWorldCoordsMatrix(data["to_world_coords_matrix"])
-      setObjectPointCount(objectPointCount + 1)
-    })
+    // console.log('socket.on("object-points"1)', objectPointCount)
 
-    return () => {
-      socket.off("to-world-coords-matrix")
-    }
-  }, [objectPointCount])
-
-  useEffect(() => {
     socket.on("object-points", (data) => {
+      // console.log('data["object_points"]')
+
+      // console.log('data["objects"]', data["objects"]);
+      // [
+      //   {
+      //     "pos": [
+      //       -0.7965489872496598,
+      //       0.008886816049402224,
+      //       0.19623931455971227
+      //     ],
+      //     "heading": 0.8118252975536989,
+      //     "error": 11.956219843564861,
+      //     "droneIndex": 0
+      //   }
+      // ]
+      if (data["objects"].length > 0) {
+        const pos = data["objects"][0]["pos"]
+        const strPos = pos.map((number: number) => number.toFixed(3))
+        setDroneUICoordinates(strPos.join("  ") + " heading:" + data["objects"][0]['heading'])
+      } else {
+        setDroneUICoordinates("NA");
+      }
+
       objectPoints.current.push(data["object_points"])
       if (data["filtered_objects"].length != 0) {
         filteredObjects.current.push(data["filtered_objects"])
@@ -249,18 +327,57 @@ export default function App() {
     return () => {
       socket.off("object-points")
     }
-  }, [objectPointCount])
+  }, [objectPointCount, setDroneUICoordinates, setObjectPointCount])
 
   useEffect(() => {
+    /* get it from local storage on first render */
+    const to_world_coords_matrix = LocalStorageAPI.getItem("to_world_coords_matrix")
+    if (to_world_coords_matrix) {
+      setToWorldCoordsMatrix(to_world_coords_matrix);
+    }
+
+    socket.on("to-world-coords-matrix", (data) => {
+      const __data = data["to_world_coords_matrix"];
+      setToWorldCoordsMatrix(__data)
+      LocalStorageAPI.setItem("to_world_coords_matrix", __data)
+      setObjectPointCount(objectPointCount + 1)
+    })
+
+    return () => {
+      socket.off("to-world-coords-matrix")
+    }
+  }, [objectPointCount, setToWorldCoordsMatrix, setObjectPointCount])
+  
+  const setToWorldCoordsMatrixHandler = useCallback((event: any) => {
+    const data = JSON.parse(event.target.value);
+    setToWorldCoordsMatrix(data)
+    LocalStorageAPI.setItem("to_world_coords_matrix", data)
+  }, [setToWorldCoordsMatrix]);
+
+  useEffect(() => {
+    /* get it from local storage on first render */
+    const camera_poses = LocalStorageAPI.getItem("camera_poses")
+    if (camera_poses) {
+      setCameraPoses(camera_poses);
+    }
+
     socket.on("camera-pose", data => {
-      console.log(data["camera_poses"])
-      setCameraPoses(data["camera_poses"])
+      const __data = data["camera_poses"];
+      console.log(__data)
+      setCameraPoses(__data)
+      LocalStorageAPI.setItem("camera_poses", __data)
     })
 
     return () => {
       socket.off("camera-pose")
     }
-  }, [])
+  }, [setCameraPoses])
+
+  const setCameraPosesHandler = useCallback((event: any) => {
+    const data = JSON.parse(event.target.value);
+    setCameraPoses(data)
+    LocalStorageAPI.setItem("camera_poses", data)
+  }, [setCameraPoses]);
 
   useEffect(() => {
     socket.on("fps", data => {
@@ -273,7 +390,7 @@ export default function App() {
   }, [])
 
   const planTrajectory = async (waypoints: object, maxVel: number[], maxAccel: number[], maxJerk: number[], timestep: number) => {
-    const location = window.location.hostname;
+    // const location = window.location.hostname;
     const settings = {
       method: 'POST',
       headers: {
@@ -341,6 +458,7 @@ export default function App() {
     socket.emit("triangulate-points", { startOrStop, cameraPoses, toWorldCoordsMatrix })
   }
 
+
   return (
     <Container fluid>
       <Row className="mt-3 mb-3 flex-nowrap" style={{ alignItems: 'center' }}>
@@ -358,7 +476,7 @@ export default function App() {
               <Col xs="auto">
                 <h4>Camera Stream</h4>
               </Col>
-              <Col>
+              <Col style={{ display: "flex", alignItems: "center" }}>
                 <Button
                   size='sm'
                   className='me-3'
@@ -369,7 +487,12 @@ export default function App() {
                 >
                   {cameraStreamRunning ? "Stop" : "Start"}
                 </Button>
-                FPS: {fps}
+                <div style={{ display: "inline-block", minWidth: 150, padding: 10, }}>
+                  <pre style={{ marginBottom: 0, }}>FPS: {fps}</pre>
+                </div>
+                <div style={{ display: "inline-block", padding: 10, }}>
+                  <pre style={{ marginBottom: 0, }}>DRONE XYZ: {droneUICoordinates}</pre>
+                </div>
               </Col>
             </Row>
             <Row className='mt-2 mb-1' style={{ height: "320px" }}>
@@ -538,7 +661,7 @@ export default function App() {
               <Col>
                 <Form.Control
                   value={JSON.stringify(cameraPoses)}
-                  onChange={(event) => setCameraPoses(JSON.parse(event.target.value))}
+                  onChange={setCameraPosesHandler}
                 />
               </Col>
             </Row>
@@ -549,7 +672,7 @@ export default function App() {
               <Col>
                 <Form.Control
                   value={JSON.stringify(toWorldCoordsMatrix)}
-                  onChange={(event) => setToWorldCoordsMatrix(JSON.parse(event.target.value))}
+                  onChange={setToWorldCoordsMatrixHandler}
                 />
               </Col>
             </Row>
@@ -746,7 +869,7 @@ export default function App() {
               </Col>
             </Row>
             {Array.from(Array(NUM_DRONES).keys()).map((droneIndex) => (
-              <>
+              <div key={"drone" + droneIndex.toString()}>
                 <Row className='pt-4'>
                   <Col xs="3">
                     <h5>Drone {droneIndex}</h5>
@@ -866,7 +989,7 @@ export default function App() {
                     </Button>
                   </Col>
                 </Row>
-              </>
+              </div>
             ))}
             <Row className='pt-3'>
               <Col xs={{ offset: 2 }} className='text-center'>

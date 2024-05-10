@@ -7,18 +7,23 @@ import {
   Title,
   Tooltip,
   Legend,
-  CoreChartOptions,
-  DatasetChartOptions,
-  ElementChartOptions,
-  PluginChartOptions,
-  ScaleChartOptions,
-  elements,
-  LineControllerChartOptions,
+  // CoreChartOptions,
+  // DatasetChartOptions,
+  // ElementChartOptions,
+  // PluginChartOptions,
+  // ScaleChartOptions,
+  // elements,
+  // LineControllerChartOptions,
   ChartData,
 } from 'chart.js';
-import { MutableRefObject, forwardRef, useEffect, useRef } from 'react';
+import { 
+  MutableRefObject,
+  // forwardRef,
+  useEffect,
+  useRef
+} from 'react';
 import { Line } from 'react-chartjs-2';
-import { text } from 'stream/consumers';
+// import { text } from 'stream/consumers';
 // @ts-ignore
 import Controller from 'node-pid-controller'
 
@@ -181,7 +186,7 @@ export default function Chart({filteredObjectsRef, droneSetpointHistoryRef, obje
   let chartRef = useRef<ChartJS<"line", number[], number> | null>(null);
 
   useEffect(() => {
-    console.log(filteredObjectsRef.current)
+    // console.log(filteredObjectsRef.current)
     let sliced = filteredObjectsRef.current.length <= 15 ? [] : filteredObjectsRef.current.slice(15)
     const length = sliced.length
     if (length === 0) {
@@ -192,7 +197,7 @@ export default function Chart({filteredObjectsRef, droneSetpointHistoryRef, obje
       const lastFilteredPoint = sliced[length-1].filter(x => x.droneIndex === currentDroneIndex)[0]
   
       if (lastFilteredPoint !== undefined) {
-        console.log(lastFilteredPoint)
+        // console.log(lastFilteredPoint)
         data.datasets[0].data.push(lastFilteredPoint["pos"][0])
         data.datasets[1].data.push(lastFilteredPoint["pos"][1])
         data.datasets[2].data.push(lastFilteredPoint["pos"][2])
@@ -261,3 +266,4 @@ export default function Chart({filteredObjectsRef, droneSetpointHistoryRef, obje
 
   return <Line ref={chartRef} options={options} data={data} height={"50px"}/>;
 }
+

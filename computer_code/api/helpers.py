@@ -21,9 +21,13 @@ class Cameras:
         f = open(filename)
         self.camera_params = json.load(f)
 
-        self.cameras = Camera(fps=90, resolution=Camera.RES_SMALL, gain=10, exposure=100)
+        # cameras order can be changed with ids order ids=[1, 0]
+        # self.cameras = Camera(fps=90, resolution=Camera.RES_SMALL, gain=10, exposure=100)
+        # self.cameras = Camera(fps=90, ids=[1, 0], resolution=Camera.RES_SMALL, gain=10, exposure=100)
+        self.cameras = Camera(fps=90, ids=[2, 1, 0], resolution=Camera.RES_SMALL, gain=10, exposure=100)
         self.num_cameras = len(self.cameras.exposure)
-        print(self.num_cameras)
+        # print(self.num_cameras)
+        # print(self.cameras.)
 
         self.is_capturing_points = False
 
@@ -350,7 +354,13 @@ def find_point_correspondance_and_object_points(image_points, camera_poses, fram
 
     Ps = [] # projection matricies
     for i, camera_pose in enumerate(camera_poses):
+
+        # print("i", i)
         RT = np.c_[camera_pose["R"], camera_pose["t"]]
+        # print("RT", RT)
+        # print("camera_poses", camera_poses)
+        # print("cameras.camera_params[i]", cameras.camera_params[i])
+
         P = cameras.camera_params[i]["intrinsic_matrix"] @ RT
         Ps.append(P)
 

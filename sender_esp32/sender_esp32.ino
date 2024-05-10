@@ -17,7 +17,8 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 void setup() {
   // Init Serial Monitor
-  Serial.begin(1000000);
+  // Serial.begin(1000000);
+  Serial.begin(250000);
 
   // Set device as a Wi-Fi Station
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -29,6 +30,8 @@ void setup() {
   //esp_wifi_set_channel(1, WIFI_SECOND_CHAN_NONE);
   esp_wifi_start();
   
+  Serial.println("\n setup start");
+
   // Init ESP-NOW
   if (esp_now_init() != ESP_OK) {
     Serial.println("Error initializing ESP-NOW");
@@ -65,6 +68,11 @@ void setup() {
     Serial.println("Failed to add peer");
     return;
   }
+
+  /* led for indicating transmition */
+  pinMode(2, OUTPUT);
+
+  Serial.println("setup finish");
 }
 
 char buffer[1024];
@@ -80,9 +88,20 @@ void loop() {
     esp_err_t result = esp_now_send(broadcastAddresses[droneIndex], (uint8_t *)&buffer, strlen(buffer) + 1);
     if (result) {
       Serial.println(esp_err_to_name(result));
+    } else {
+      digitalWrite(2, !digitalRead(2));
     }
-  }
-  else {
+  } else {
     yield();
   }
+
+  // delay(1000);
+  // char * buffer = "{\"armed\": 1}";
+  // esp_err_t result = esp_now_send(broadcastAddresses[0], (uint8_t*)buffer, strlen(buffer) + 1);
+  // if (result) {
+  //   Serial.println(esp_err_to_name(result));
+  // } else {
+  //   Serial.println("sent ok");
+  // }
 }
+

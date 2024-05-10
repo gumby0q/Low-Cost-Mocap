@@ -18,15 +18,24 @@ import json
 
 serialLock = threading.Lock()
 
-ser = serial.Serial("/dev/cu.usbserial-02X2K2GE", 1000000, write_timeout=1, )
+# serial_port_path = "/dev/cu.usbserial-02X2K2GE"
+# serial_port_speed = 1000000
+serial_port_speed = 250000
+
+serial_port_path = "/dev/ttyUSB0"
+# serial_port_speed = 230400
+# serial_port_speed = 115200
+
+ser = serial.Serial(serial_port_path, serial_port_speed, write_timeout=1, )
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins='*')
 
-cameras_init = False
+cameras_init = True
+# cameras_init = False
 
-num_objects = 2
+num_objects = 1
 
 @app.route("/api/camera-stream")
 def camera_stream():
@@ -111,12 +120,16 @@ def plan_trajectory(start_pos, end_pos, waypoints, max_vel, max_accel, max_jerk,
 
     return setpoints
 
+
+# ----------------------------------------------------------------------------- drone things >>>>
 @socketio.on("arm-drone")
 def arm_drone(data):
+    # print("drone 0", data)
     global cameras_init
     if not cameras_init:
         return
     
+    # print("drone ", data)
     Cameras.instance().drone_armed = data["droneArmed"]
     for droneIndex in range(0, num_objects):
         serial_data = {
@@ -153,6 +166,7 @@ def arm_drone(data):
     with serialLock:
         ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
         time.sleep(0.01)
+# ----------------------------------------------------------------------------- drone things <<<<
 
 
 @socketio.on("acquire-floor")
