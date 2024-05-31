@@ -16,6 +16,11 @@ from ruckig import InputParameter, OutputParameter, Result, Ruckig
 from flask_cors import CORS
 import json
 
+from TestFlight import TestFlightBaseComponent, TestFlightMediator
+import csv
+from datetime import datetime
+from Componnents import CalculationLoopC, CamerasC, SerialPortC, SocketIOC, DataProcessor
+
 serialLock = threading.Lock()
 
 # serial_port_path = "/dev/cu.usbserial-02X2K2GE"
@@ -37,12 +42,39 @@ cameras_init = True
 
 num_objects = 1
 
+# ---------------------------------------------
+# refactoring >>>>>
+
+# xPWM = json["pwm"][0];
+# yPWM = json["pwm"][1];
+# zPWM = json["pwm"][2];
+# yawPWM = json["pwm"][3];
+
+cameras = Cameras.instance()
+camerasC = CamerasC(cameras)
+serialPortC = SerialPortC(ser, serialLock)
+socketioC = SocketIOC(socketio)
+calculationLoopC = CalculationLoopC()
+dataProcessorC = DataProcessor()
+
+tfMediator = TestFlightMediator(
+    camerasC,
+    serialPortC,
+    socketioC,
+    calculationLoopC,
+    dataProcessorC,
+)
+# ---------------------------------------------
+
+
 @app.route("/api/camera-stream")
 def camera_stream():
-    cameras = Cameras.instance()
+    # cameras = Cameras.instance()
+    global cameras
     cameras.set_socketio(socketio)
     cameras.set_ser(ser)
     cameras.set_serialLock(serialLock)
+    cameras.set_num_objects(num_objects)
     cameras.set_num_objects(num_objects)
     
     def gen(cameras):
@@ -60,9 +92,12 @@ def camera_stream():
 
             if time_now - last_run_time < loop_interval:
                 time.sleep(last_run_time - time_now + loop_interval)
+
             last_run_time = time.time()
             frames = cameras.get_frames()
-            jpeg_frame = cv.imencode('.jpg', frames)[1].tostring()
+
+            # jpeg_frame = cv.imencode('.jpg', frames)[1].tostring()
+            jpeg_frame = cv.imencode('.jpg', frames)[1].tobytes() # fix deprecated things
 
             yield (b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' + jpeg_frame + b'\r\n')
@@ -132,16 +167,21 @@ def arm_drone(data):
     # print("drone ", data)
     Cameras.instance().drone_armed = data["droneArmed"]
     for droneIndex in range(0, num_objects):
+        armed_status = data["droneArmed"][droneIndex]
         serial_data = {
-            "armed": data["droneArmed"][droneIndex],
+            "armed": armed_status,
         }
         with serialLock:
             ser.write(f"{str(droneIndex)}{json.dumps(serial_data)}".encode('utf-8'))
         
+        # custom logic
+        if droneIndex == 0:
+            tfMediator.notify("socket_api", "armed_0", armed_status)
         time.sleep(0.01)
 
 @socketio.on("set-drone-pid")
 def arm_drone(data):
+    print("data", data)
     serial_data = {
         "pid": [float(x) for x in data["dronePID"]],
     }
@@ -337,5 +377,8 @@ def live_mocap(data):
         cameras.stop_trangulating_points()
 
 
+
 if __name__ == '__main__':
-    socketio.run(app, port=3001, debug=True)
+    tfMediator.start()
+    # use_reloader=False prevents loop start twice
+    socketio.run(app, port=3001, debug=True, use_reloader=False)

@@ -182,7 +182,7 @@ let yPosPID = new Controller();
 let zPosPID = new Controller();
 
 export default function Chart({filteredObjectsRef, droneSetpointHistoryRef, objectPointCount, dronePID, droneArmed, currentDroneIndex}: 
-  {filteredObjectsRef: MutableRefObject<object>, droneSetpointHistoryRef: MutableRefObject<number[][]>, objectPointCount: number, dronePID: number[], droneArmed: boolean[], currentDroneIndex: number}) {
+  {filteredObjectsRef: MutableRefObject<Array>, droneSetpointHistoryRef: MutableRefObject<number[][]>, objectPointCount: number, dronePID: number[], droneArmed: boolean[], currentDroneIndex: number}) {
   let chartRef = useRef<ChartJS<"line", number[], number> | null>(null);
 
   useEffect(() => {

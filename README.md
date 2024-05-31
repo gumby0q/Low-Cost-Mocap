@@ -48,6 +48,9 @@ pip install serial # dk if that needed???
 pip install ruckig
 pip install flask_cors
 pip install pyserial
+
+pip install matplotlib
+pip install pandas
 ```
 
 ### camera libs code, pseye, fixes
@@ -267,4 +270,9 @@ Watch this for information about the project & a demo!
 ## Architectural Diagram
 ![](https://github.com/jyjblrd/Mocap-Drones/blob/main/images/architecture.png?raw=true)
 
+
+
+DRONE XYZ: -0.421  0.154  0.296 heading:-0.141559525860047
+
+відтестити спочатку ось z а потім вже інші
 

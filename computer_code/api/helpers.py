@@ -49,6 +49,10 @@ class Cameras:
 
         self.serialLock = None
 
+        # refactoring >>>
+        self.parentComponent = None 
+        # refactoring <<<
+
         global cameras_init
         cameras_init = True
 
@@ -117,18 +121,26 @@ class Cameras:
                                 if self.drone_armed[filtered_object['droneIndex']]:
                                     filtered_object["heading"] = round(filtered_object["heading"], 4)
 
-                                    serial_data = { 
-                                        "pos": [round(x, 4) for x in filtered_object["pos"].tolist()] + [filtered_object["heading"]],
-                                        "vel": [round(x, 4) for x in filtered_object["vel"].tolist()]
-                                    }
-                                    with self.serialLock:
-                                        self.ser.write(f"{filtered_object['droneIndex']}{json.dumps(serial_data)}".encode('utf-8'))
-                                        time.sleep(0.001)
-                            
+                                    # serial_data = { 
+                                    #     "pos": [round(x, 4) for x in filtered_object["pos"].tolist()] + [filtered_object["heading"]],
+                                    #     "vel": [round(x, 4) for x in filtered_object["vel"].tolist()]
+                                    # }
+                                    # with self.serialLock:
+                                    #     self.ser.write(f"{filtered_object['droneIndex']}{json.dumps(serial_data)}".encode('utf-8'))
+                                    #     time.sleep(0.001)
+
                         for filtered_object in filtered_objects:
                             filtered_object["vel"] = filtered_object["vel"].tolist()
                             filtered_object["pos"] = filtered_object["pos"].tolist()
                     
+                    # refactoring >>>
+                    self.parentComponent.mediator.notify(
+                        self.parentComponent,
+                        "frame_parsed",
+                        filtered_objects,
+                    )
+                    # refactoring <<<
+
                     self.socketio.emit("object-points", {
                         "object_points": object_points.tolist(), 
                         "errors": errors.tolist(), 
@@ -546,3 +558,4 @@ def add_white_border(image, border_size):
     height, width = image.shape[:2]
     bordered_image = cv.copyMakeBorder(image, border_size, border_size, border_size, border_size, cv.BORDER_CONSTANT, value=[255, 255, 255])
     return bordered_image
+

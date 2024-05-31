@@ -2,24 +2,43 @@
 
 import { FormEventHandler, useState, createRef, Ref, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Button, Card, Col, Container, Row } from 'react-bootstrap';
-import Toolbar from './components/Toolbar';
+// import Toolbar from './components/Toolbar';
 import Form from 'react-bootstrap/Form';
 import { Tooltip } from 'react-tooltip'
 import CameraWireframe from './components/CameraWireframe';
-import { io } from 'socket.io-client';
+// import ThreeScene from './components/ThreeScene';
+// import { io } from 'socket.io-client';
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Stats, OrbitControls } from '@react-three/drei'
 import Points from './components/Points';
 import { socket } from './shared/styles/scripts/socket';
-import { matrix, mean, multiply, rotationMatrix } from 'mathjs';
+// import { matrix, mean, multiply, rotationMatrix } from 'mathjs';
 import Objects from './components/Objects';
-import Chart from './components/chart';
+// import Chart from './components/chart';
+
+import LiveLineCharts, { OpenNewWindow } from './components/LiveLineCharts';
 import TrajectoryPlanningSetpoints from './components/TrajectoryPlanningSetpoints';
+import { useThreeDataStore } from './components/ThreeDataStore';
 
 const TRAJECTORY_PLANNING_TIMESTEP = 0.05
 const LAND_Z_HEIGHT = 0.075
-const NUM_DRONES = 2
+const NUM_DRONES = 1
 
+useThreeDataStore.setState({ NUM_DRONES: NUM_DRONES});
+
+
+const ARRAY_LIMIT = 1500;
+
+const cropOverflow = (array_: any) => {
+  const arrayLength = array_.length;
+  
+  if (arrayLength >= ARRAY_LIMIT) {
+    // return array_.slice(arrayLength-ARRAY_LIMIT, ARRAY_LIMIT);
+    return array_.slice(-ARRAY_LIMIT);
+  }
+
+  return array_;
+}
 
 
 class LocalStorageAPI {
@@ -81,6 +100,59 @@ class LocalStorageAPI {
 // };
 
 
+
+const planTrajectory = async (waypoints: object, maxVel: number[], maxAccel: number[], maxJerk: number[], timestep: number) => {
+  // const location = window.location.hostname;
+  const settings = {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      waypoints,
+      maxVel,
+      maxAccel,
+      maxJerk,
+      timestep
+    })
+  };
+  const fetchResponse = await fetch(`http://localhost:3001/api/trajectory-planning`, settings);
+  const data = await fetchResponse.json();
+
+  return data.setpoints
+}
+
+const wait = async (ms: number) => new Promise(r => setTimeout(r, ms))
+
+
+const calculateCameraPose = async (cameraPoints: Array<Array<Array<number>>>) => {
+  socket.emit("calculate-camera-pose", { cameraPoints })
+}
+
+const isValidJson = (str: string) => {
+  try {
+    const o = JSON.parse(str);
+    if (o && typeof o === "object") {
+      return true;
+    }
+  } catch (e) { }
+  return false;
+}
+
+
+// cameraPoses={cameraPoses}
+// objectPointsRef={objectPoints}
+// objectPointErrorsRef={objectPointErrors}
+// filteredObjectsRef={filteredObjects}
+
+// trajectoryPlanningSetpoints={trajectoryPlanningSetpoints}
+// NUM_DRONES={NUM_DRONES}
+
+/* ------------------------------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------------------------------ */
+/* ------------------------------------------------------------------------------------------------ */
+
 export default function App() {
   const [cameraStreamRunning, setCameraStreamRunning] = useState(false);
 
@@ -94,7 +166,7 @@ export default function App() {
   const [isLocatingObjects, setIsLocatingObjects] = useState(false);
 
   const objectPoints = useRef<Array<Array<Array<number>>>>([])
-  const filteredObjects = useRef<object[][]>([])
+  const filteredObjects = useRef<Array<{pos:[]}[]>>([])
   const droneSetpointHistory = useRef<number[][]>([])
   const objectPointErrors = useRef<Array<Array<number>>>([])
   const objects = useRef<Array<Array<Object>>>([])
@@ -102,7 +174,7 @@ export default function App() {
 
   const [fps, setFps] = useState(0);
 
-  const [cameraPoses, setCameraPoses] = useState<Array<object>>([{ "R": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "t": [0, 0, 0] }, { "R": [[-0.0008290000610233772, -0.7947131755287576, 0.6069845808584402], [0.7624444396180684, 0.3922492478955913, 0.5146056781855716], [-0.6470531579819294, 0.46321862674804054, 0.6055994671226776]], "t": [-2.6049886186449047, -2.173986915510569, 0.7303458563542193] }, { "R": [[-0.9985541623963866, -0.028079891357569067, -0.045837806036037466], [-0.043210651917521686, -0.08793122558361385, 0.9951888962042462], [-0.03197537054848707, 0.995730696156702, 0.0865907408997996]], "t": [0.8953888630067902, -3.4302652822708373, 3.70967106300893] }, { "R": [[-0.4499864100408215, 0.6855400696798954, -0.5723172578577878], [-0.7145273934510732, 0.10804105689305427, 0.6912146801345055], [0.5356891214002657, 0.7199735709654319, 0.4412201517663212]], "t": [2.50141072072536, -2.313616767292231, 1.8529907514099284] }])
+  const [cameraPoses, setCameraPoses] = useState<Array<{ R:number[][], t:number[] }>>([{ "R": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "t": [0, 0, 0] }, { "R": [[-0.0008290000610233772, -0.7947131755287576, 0.6069845808584402], [0.7624444396180684, 0.3922492478955913, 0.5146056781855716], [-0.6470531579819294, 0.46321862674804054, 0.6055994671226776]], "t": [-2.6049886186449047, -2.173986915510569, 0.7303458563542193] }, { "R": [[-0.9985541623963866, -0.028079891357569067, -0.045837806036037466], [-0.043210651917521686, -0.08793122558361385, 0.9951888962042462], [-0.03197537054848707, 0.995730696156702, 0.0865907408997996]], "t": [0.8953888630067902, -3.4302652822708373, 3.70967106300893] }, { "R": [[-0.4499864100408215, 0.6855400696798954, -0.5723172578577878], [-0.7145273934510732, 0.10804105689305427, 0.6912146801345055], [0.5356891214002657, 0.7199735709654319, 0.4412201517663212]], "t": [2.50141072072536, -2.313616767292231, 1.8529907514099284] }])
   const [toWorldCoordsMatrix, setToWorldCoordsMatrix] = useState<number[][]>([[0.9941338485260931, 0.0986512964608827, -0.04433748889242502, 0.9938296704767513], [-0.0986512964608827, 0.659022672138982, -0.7456252673517598, 2.593331619023365], [0.04433748889242498, -0.7456252673517594, -0.6648888236128887, 2.9576262456228286], [0, 0, 0, 1]])
 
   const [currentDroneIndex, setCurrentDroneIndex] = useState(0)
@@ -119,11 +191,41 @@ export default function App() {
   const [trajectoryPlanningMaxJerk, setTrajectoryPlanningMaxJerk] = useState(["0.5", "0.5", "0.5"])
   // const [trajectoryPlanningWaypoints, setTrajectoryPlanningWaypoints] = useState("[0.2,0.2,0.5,true],\n[-0.2,0.2,0.5,true],\n[-0.2,0.2,0.8,true],\n[-0.2,-0.2,0.8,true],\n[-0.2,-0.2,0.5,true],\n[0.2,-0.2,0.5,true],\n[0.2,-0.2,0.8,true],\n[0.2,0.2,0.8,true],\n[0.2,0.2,0.5,true]\n]")
   const [trajectoryPlanningWaypoints, setTrajectoryPlanningWaypoints] = useState("[\n[0.2,0.2,0.6,0,0,0.8,true],\n[-0.2,0.2,0.6,0.2,0.2,0.6,true],\n[-0.2,-0.2,0.5,0,0,0.4,true],\n[0.2,-0.2,0.5,-0.2,-0.2,0.6,true],\n[0.2,0.2,0.5,0,0,0.8,true]\n]")
-  const [trajectoryPlanningSetpoints, setTrajectoryPlanningSetpoints] = useState<number[][][]>([])
+  const [trajectoryPlanningSetpoints, setTrajectoryPlanningSetpoints] = useState<number[][]>([])
   const [trajectoryPlanningRunStartTimestamp, setTrajectoryPlanningRunStartTimestamp] = useState(0)
 
   const [droneUICoordinates, setDroneUICoordinates] = useState('')
   // const [droneDestinationUICoordinates, setDroneDestinationUICoordinates] = useState('')
+
+
+  /* ---------------------------- */
+  /* ---------------------------- */
+  // store_updates
+  // cameraPoses={cameraPoses}
+  // objectPointsRef={objectPoints}
+  // objectPointErrorsRef={objectPointErrors}
+  // filteredObjectsRef={filteredObjects}
+
+  // trajectoryPlanningSetpoints={trajectoryPlanningSetpoints}
+  // NUM_DRONES={NUM_DRONES}
+  // const _setObjectPoints = useThreeDataStore(state => state.setObjectPoints);
+  // const _setObjectPointErrors = useThreeDataStore(state => state.setObjectPointErrors);
+  // const _setFilteredObjects = useThreeDataStore(state => state.setFilteredObjects);
+
+  // const _setCameraPoses = useThreeDataStore(state => state.setCameraPoses);
+  // const _setTrajectoryPlanningSetpoints = useThreeDataStore(state => state.setTrajectoryPlanningSetpoints);
+  // const _setToWorldCoordsMatrix = useThreeDataStore(state => state.setToWorldCoordsMatrix);
+  // useEffect(() => {
+  //   _setCameraPoses(cameraPoses)
+  // }, [cameraPoses, _setCameraPoses])  
+  // useEffect(() => {
+  //   _setTrajectoryPlanningSetpoints(trajectoryPlanningSetpoints);
+  // }, [trajectoryPlanningSetpoints, _setTrajectoryPlanningSetpoints])
+  // useEffect(() => {
+  //   _setToWorldCoordsMatrix(toWorldCoordsMatrix);
+  // }, [toWorldCoordsMatrix, _setToWorldCoordsMatrix])
+  /* ---------------------------- */
+  /* ---------------------------- */
 
   const updateCameraSettings: FormEventHandler = (e) => {
     e.preventDefault()
@@ -249,17 +351,20 @@ export default function App() {
             }
 
             case "plannedTrajectory": {
-              const index = Math.floor((timestamp - trajectoryPlanningRunStartTimestamp) / TRAJECTORY_PLANNING_TIMESTEP)
-              if (index < trajectoryPlanningSetpoints.length) {
-                tempDroneSetpoint = trajectoryPlanningSetpoints[droneIndex][index]
-                tempDroneSetpoint.map(x => x.toFixed(3))
-                socket.emit("set-drone-setpoint", { "droneSetpoint": tempDroneSetpoint, droneIndex })
-              }
-              else {
-                let newMotionPreset = motionPreset.slice()
-                newMotionPreset[droneIndex] = "setpoint"
-                setMotionPreset(newMotionPreset)
-              }
+              /* todo: wtf is here? inconsistancy with other data setters! */
+              // const index = Math.floor((timestamp - trajectoryPlanningRunStartTimestamp) / TRAJECTORY_PLANNING_TIMESTEP)
+              // if (index < trajectoryPlanningSetpoints.length) {
+              //   tempDroneSetpoint = trajectoryPlanningSetpoints[droneIndex][index]
+              //   tempDroneSetpoint.map(x => x.toFixed(3))
+              //   socket.emit("set-drone-setpoint", { "droneSetpoint": tempDroneSetpoint, droneIndex })
+              // }
+              // else {
+              //   let newMotionPreset = motionPreset.slice()
+              //   newMotionPreset[droneIndex] = "setpoint"
+              //   setMotionPreset(newMotionPreset)
+              // }
+              console.warn("some bug here!!!!!???")
+
               break;
             }
 
@@ -315,19 +420,34 @@ export default function App() {
       }
 
       objectPoints.current.push(data["object_points"])
+      objectPoints.current = cropOverflow(objectPoints.current);
+
+
+      // _setObjectPoints(objectPoints.current);
       if (data["filtered_objects"].length != 0) {
         filteredObjects.current.push(data["filtered_objects"])
+        filteredObjects.current = cropOverflow(filteredObjects.current);
+        // _setFilteredObjects(filteredObjects.current);
       }
       objectPointErrors.current.push(data["errors"])
+      // _setObjectPointErrors(objectPointErrors.current);
       objects.current.push(data["objects"])
+      objects.current = cropOverflow(objects.current);
+      
       droneSetpointHistory.current.push(droneSetpointWithMotion)
+      droneSetpointHistory.current = cropOverflow(droneSetpointHistory.current);
       setObjectPointCount(objectPointCount + 1)
     })
 
     return () => {
       socket.off("object-points")
     }
-  }, [objectPointCount, setDroneUICoordinates, setObjectPointCount])
+  }, [objectPointCount, 
+    setDroneUICoordinates, 
+    setObjectPointCount, 
+    // _setFilteredObjects,
+    // _setObjectPoints,
+  ])
 
   useEffect(() => {
     /* get it from local storage on first render */
@@ -389,69 +509,67 @@ export default function App() {
     }
   }, [])
 
-  const planTrajectory = async (waypoints: object, maxVel: number[], maxAccel: number[], maxJerk: number[], timestep: number) => {
-    // const location = window.location.hostname;
-    const settings = {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        waypoints,
-        maxVel,
-        maxAccel,
-        maxJerk,
-        timestep
-      })
-    };
-    const fetchResponse = await fetch(`http://localhost:3001/api/trajectory-planning`, settings);
-    const data = await fetchResponse.json();
+  useEffect(() => {    
+    function keysFunction(event: any) {
+      // Check which key was pressed
+      const key = event.key; // Use event.key for modern browsers
 
-    return data.setpoints
-  }
+      // Example: Check if the "a" key was pressed
+      if (key === 'z' || key === 'Z') {
+        // alert('The "a" key was pressed!');
+        // You can also call a function here
+        // console.log("key pressed ", key)
+        if (isTriangulatingPoints) {
+          const droneIndex = 0;
+          setDroneArmed(droneArmed => {
+            let newDroneArmed = droneArmed.slice()
+            newDroneArmed[droneIndex] = !newDroneArmed[droneIndex];
+            return newDroneArmed
+          });
+        }
+      }
 
-  const wait = async (ms: number) => new Promise(r => setTimeout(r, ms))
+      // // Example: Check if the Enter key was pressed
+      // if (key === 'Enter') {
+      //   alert('The Enter key was pressed!');
+      //   // You can also call a function here
+      //   // myFunction();
+      // }
+    }
+    document.addEventListener('keydown', keysFunction);
+
+    return () => {
+      document.removeEventListener('keydown', keysFunction);
+    }
+  }, [isTriangulatingPoints, setDroneArmed])
 
   const moveToPos = async (pos: number[], droneIndex: number) => {
-    console.log(filteredObjects.current[filteredObjects.current.length - 1][droneIndex])
-    const waypoints = [
-      filteredObjects.current[filteredObjects.current.length - 1][droneIndex]["pos"].concat([true]),
-      pos.concat([true])
-    ]
-    const setpoints = await planTrajectory(
-      waypoints,
-      trajectoryPlanningMaxVel.map(x => parseFloat(x)),
-      trajectoryPlanningMaxAccel.map(x => parseFloat(x)),
-      trajectoryPlanningMaxJerk.map(x => parseFloat(x)),
-      TRAJECTORY_PLANNING_TIMESTEP
-    )
+    // console.log(filteredObjects.current[filteredObjects.current.length - 1][droneIndex])
+    console.warn("fix this shit!")
+    // const waypoints = [
+    //   /* todo: some bullshit!!!??? */
+    //   filteredObjects.current[filteredObjects.current.length - 1][droneIndex]["pos"].concat([true]),
+    //   pos.concat([true])
+    // ]
+    // const setpoints = await planTrajectory(
+    //   waypoints,
+    //   trajectoryPlanningMaxVel.map(x => parseFloat(x)),
+    //   trajectoryPlanningMaxAccel.map(x => parseFloat(x)),
+    //   trajectoryPlanningMaxJerk.map(x => parseFloat(x)),
+    //   TRAJECTORY_PLANNING_TIMESTEP
+    // )
 
-    for await (const [i, setpoint] of setpoints.entries()) {
-      setpoint.map(x => x.toFixed(3))
-      socket.emit("set-drone-setpoint", { "droneSetpoint": setpoint, droneIndex })
-      setDroneSetpointWithMotion(setpoint)
+    // for await (const [i, setpoint] of setpoints.entries()) {
+    //   setpoint.map(x => x.toFixed(3))
+    //   socket.emit("set-drone-setpoint", { "droneSetpoint": setpoint, droneIndex })
+    //   setDroneSetpointWithMotion(setpoint)
 
-      // if (land && i > 0.75*setpoints.length && filteredObjects.current[filteredObjects.current.length-1]["vel"][2] >= -0.2) {
-      //   setDroneArmed(false)
-      // }
+    //   // if (land && i > 0.75*setpoints.length && filteredObjects.current[filteredObjects.current.length-1]["vel"][2] >= -0.2) {
+    //   //   setDroneArmed(false)
+    //   // }
 
-      await wait(TRAJECTORY_PLANNING_TIMESTEP * 1000)
-    }
-  }
-
-  const calculateCameraPose = async (cameraPoints: Array<Array<Array<number>>>) => {
-    socket.emit("calculate-camera-pose", { cameraPoints })
-  }
-
-  const isValidJson = (str: string) => {
-    try {
-      const o = JSON.parse(str);
-      if (o && typeof o === "object") {
-        return true;
-      }
-    } catch (e) { }
-    return false;
+    //   await wait(TRAJECTORY_PLANNING_TIMESTEP * 1000)
+    // }
   }
 
   const startLiveMocap = (startOrStop: string) => {
@@ -465,9 +583,9 @@ export default function App() {
         <Col className="ms-4" style={{ width: 'fit-content' }} md="auto">
           <h2>MoCap</h2>
         </Col>
-        <Col>
+        {/* <Col>
           <Toolbar />
-        </Col>
+        </Col> */}
       </Row>
       <Row>
         <Col>
@@ -487,6 +605,36 @@ export default function App() {
                 >
                   {cameraStreamRunning ? "Stop" : "Start"}
                 </Button>
+                <OpenNewWindow
+                  label={"3D Chart"}
+                  innerComponent={
+                    // <Col style={{ height: "600px" }}>
+                    // <div style={{ width: 800, height: 600 }}>
+                      <Canvas style={{ width: 800, height: 600 }} orthographic camera={{ zoom: 1000, position: [0, 0, 10] }}>
+                        <ambientLight />
+                        {cameraPoses.map(({ R, t }, i) => (
+                          <CameraWireframe R={R} t={t} toWorldCoordsMatrix={toWorldCoordsMatrix} key={i} />
+                        ))}
+                        <Points objectPointsRef={objectPoints} objectPointErrorsRef={objectPointErrors} count={objectPointCount} />
+                        <Objects filteredObjectsRef={filteredObjects} count={objectPointCount} />
+                        <TrajectoryPlanningSetpoints trajectoryPlanningSetpoints={trajectoryPlanningSetpoints} NUM_DRONES={NUM_DRONES} />
+                        <OrbitControls />
+                        <axesHelper args={[0.2]} />
+                        <gridHelper args={[4, 4 * 10]} />
+                        <directionalLight />
+                      </Canvas>
+                    // </div>
+                    // </Col>
+                  }
+                />
+                <OpenNewWindow
+                  label={"Live Chart"}
+                  innerComponent={
+                    <div style={{ width: 800, height: 1000 }}>
+                      <LiveLineCharts />
+                    </div>
+                  }
+                />
                 <div style={{ display: "inline-block", minWidth: 150, padding: 10, }}>
                   <pre style={{ marginBottom: 0, }}>FPS: {fps}</pre>
                 </div>
@@ -541,6 +689,10 @@ export default function App() {
                       objects.current = []
                       filteredObjects.current = []
                       droneSetpointHistory.current = []
+
+                      // _setObjectPoints(objectPoints.current);
+                      // _setObjectPointErrors(objectPointErrors.current);
+                      // _setFilteredObjects(filteredObjects.current);
                     }
                     setIsTriangulatingPoints(!isTriangulatingPoints);
                     startLiveMocap(isTriangulatingPoints ? "stop" : "start");
@@ -1271,13 +1423,13 @@ export default function App() {
           </Card>
         </Col>
       </Row>
-      <Row className='pt-3'>
+      {/* <Row className='pt-3'>
         <Col>
           <Card className='shadow-sm p-3'>
             <Chart filteredObjectsRef={filteredObjects} droneSetpointHistoryRef={droneSetpointHistory} objectPointCount={objectPointCount} dronePID={dronePID.map(x => parseFloat(x))} droneArmed={droneArmed} currentDroneIndex={currentDroneIndex} />
           </Card>
         </Col>
-      </Row>
+      </Row> */}
       <Row className='pt-3'>
         <Col>
           <Card className='shadow-sm p-3'>
@@ -1286,7 +1438,7 @@ export default function App() {
                 {/* <h4>Scene Viewer {objectPointErrors.current.length !== 0 ? mean(objectPointErrors.current.flat()) : ""}</h4> */}
               </Col>
             </Row>
-            <Row>
+            {/* <Row>
               <Col style={{ height: "1000px" }}>
                 <Canvas orthographic camera={{ zoom: 1000, position: [0, 0, 10] }}>
                   <ambientLight />
@@ -1302,7 +1454,13 @@ export default function App() {
                   <directionalLight />
                 </Canvas>
               </Col>
-            </Row>
+            </Row> */}
+            {/* <Row>
+              <Col style={{ height: "1000px", width: "90%" }}>
+                <ThreeScene />
+              </Col>
+            </Row> */}
+            {/* <LiveLineChart/> */}
           </Card>
         </Col>
       </Row>

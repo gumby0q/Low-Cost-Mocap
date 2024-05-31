@@ -7,10 +7,15 @@
 #include <EEPROM.h>
 #include "sbus.h"
 
+
 #define batVoltagePin 34
 #define MAX_VEL 100
-#define ROTOR_RADIUS 0.0225
-#define Z_GAIN 0.7
+// #define ROTOR_RADIUS 0.0225
+#define ROTOR_RADIUS 0.02
+
+// #define Z_GAIN 0.7
+#define Z_GAIN 0.8
+
 
 #define DRONE_INDEX 0
 
@@ -40,10 +45,16 @@ double groundEffectCoef = 28, groundEffectOffset = -0.035;
 // outer: position pid loop
 // inner: velocity pid loop
 // velocity pid loop sends accel setpoint to flight controller
-double xPosSetpoint = -0.421, xPos = 0;
-double yPosSetpoint = 0.154, yPos = 0;
-double zPosSetpoint = 0.296, zPos = 0;
-double yawPosSetpoint = -0.1415, yawPos, yawPosOutput;
+// double xPosSetpoint = -0.421, xPos = 0;
+// double yPosSetpoint = 0.154, yPos = 0;
+// double zPosSetpoint = 0.296, zPos = 0;
+
+double xPosSetpoint = 0.0, xPos = 0;
+double yPosSetpoint = 0.0, yPos = 0;
+double zPosSetpoint = 0.0, zPos = 0;
+
+// double yawPosSetpoint = -0.1415, yawPos, yawPosOutput;
+double yawPosSetpoint = 0.0, yawPos, yawPosOutput;
 
 double xyPosKp = 1, xyPosKi = 0, xyPosKd = 0;
 double zPosKp = 1.5, zPosKi = 0, zPosKd = 0;
@@ -53,7 +64,8 @@ double xVelSetpoint, xVel, xVelOutput;
 double yVelSetpoint, yVel, yVelOutput;
 double zVelSetpoint, zVel, zVelOutput;
 
-double xyVelKp = 0.2, xyVelKi = 0.03, xyVelKd = 0.05;
+// double xyVelKp = 0.2, xyVelKi = 0.03, xyVelKd = 0.05;
+double xyVelKp = 0.1, xyVelKi = 0.01, xyVelKd = 0.05;
 double zVelKp = 0.3, zVelKi = 0.1, zVelKd = 0.05;
 
 // PID::PID(double* Input, double* Output, double* Setpoint,
@@ -82,6 +94,13 @@ float sbusFrequency = 50.0;
 #elif DRONE_INDEX == 1
   uint8_t newMACAddress[] = { 0xC0, 0x4E, 0x30, 0x4B, 0x80, 0x3B };
 #endif
+
+
+// volatile uint16_t xPWM = 992;
+// volatile uint16_t yPWM = 992;
+// volatile uint16_t zPWM = 992;
+// volatile uint16_t yawPWM = 992;
+
 
 // callback function that will be executed when data is received
 void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
@@ -116,7 +135,7 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     // yPosSetpoint = json["setpoint"][1];
     // zPosSetpoint = json["setpoint"][2];
   } else if (json.containsKey("pid")) {
-      // Serial.println("\n PID!!! \n");
+    Serial.println("\n json PID!!! \n");
     xPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
     yPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
     zPosPID.SetTunings(json["pid"][3], json["pid"][4], json["pid"][5]);
@@ -129,10 +148,16 @@ void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     groundEffectCoef = json["pid"][15];
     groundEffectOffset = json["pid"][16];
   } else if (json.containsKey("trim")) {
+    Serial.println("\n json TRIM!!! \n");
     xTrim = json["trim"][0];
     yTrim = json["trim"][1];
     zTrim = json["trim"][2];
     yawTrim = json["trim"][3];
+  } else if (json.containsKey("pwm")) {
+    // xPWM = json["pwm"][0];  
+    // yPWM = json["pwm"][1];
+    // zPWM = json["pwm"][2];
+    // yawPWM = json["pwm"][3];
   }
 
   lastPing = micros();
@@ -241,7 +266,9 @@ void setup() {
 
 
 void loop() {
-  while (micros() - lastLoopTime < 1e6 / loopFrequency) { yield(); }
+  while (micros() - lastLoopTime < 1e6 / loopFrequency) {
+    yield();
+  }
   lastLoopTime = micros();
 
   if (micros() - lastPing > 2e6) {
@@ -250,14 +277,10 @@ void loop() {
 
   if (armed) {
     data.ch[4] = 1812;
-    // if ((micros()/1000 - millisFromStart) > DELAY_TO_ARM) {
-    //   data.ch[4] = 1811;
-    // }
   } else {
     /* reset if not armed */
     millisFromArm = micros()/1000;
 
-    // zBase = 173;
     data.ch[4] = 172;
     resetPid(xPosPID, -MAX_VEL, MAX_VEL);
     resetPid(yPosPID, -MAX_VEL, MAX_VEL);
@@ -283,6 +306,7 @@ void loop() {
   xVelPID.Compute();
   yVelPID.Compute();
   zVelPID.Compute();
+
   int xPWM = 992 + (xVelOutput * 811) + xTrim;
   int yPWM = 992 + (yVelOutput * 811) + yTrim;
   // int zPWM = 992 + (Z_GAIN * zVelOutput * 811) + zTrim;
@@ -294,7 +318,7 @@ void loop() {
   int _zPWM = zPWM * max(0., groundEffectMultiplier);
   // if (armed) {
   //   if ((millis() - timeArmed)) > 100) {
-      zPWM = _zPWM;
+      // zPWM = _zPWM;
   //   } else {
   //     zPWM = 172;
   //   }
@@ -307,16 +331,27 @@ void loop() {
     zPWM = 173;
   }
 
-  data.ch[0] = -yPWM;
+  // data.ch[0] = -yPWM;
+  // data.ch[1] = xPWM;
+  // data.ch[2] = zPWM;
+  // data.ch[3] = yawPWM;
+
+  if ((micros()/1000 - millisFromArm) > /* delay*/ 1000) {
+    // zPWM = 992;
+  } else {
+    zPWM = 173;
+  }
+
+  data.ch[0] = yPWM;
   data.ch[1] = xPWM;
   data.ch[2] = zPWM;
   data.ch[3] = yawPWM;
 
   // my hack test <<
-  data.ch[0] = 992;
-  data.ch[1] = 992;
+  // data.ch[0] = 992;
+  // data.ch[1] = 992;
   // data.ch[2] = 173; // trottle
-  data.ch[3] = 992;
+  // data.ch[3] = 992;
   // data.ch[4] = 173; // arm
   // data.ch[5] = 173; // angle off
   data.ch[5] = 1811; // angle on
@@ -326,7 +361,7 @@ void loop() {
   // my hack test <<
 
 
-  if (micros() - lastPrint > 2e6/3) {
+  if ((micros() - lastPrint) > /* us */ (500 * 1000)) {
     lastPrint = micros();
     if (armed) {
       // Serial.printf("\narmed 3 yes %d %u %d zBase %d \n", (uint8_t)armed, data.ch[4], zVelOutput * 100, zBase);
@@ -335,12 +370,8 @@ void loop() {
       Serial.printf("\narmed 3 no  %d\n", (uint8_t)armed);
     }
 
-    Serial.printf("zBase %d zPWM %d _zPWM %d zPWMshift %d\n", zBase, zPWM, _zPWM, zPWMshift);
-    Serial.printf("xPWM %d yPWM %d yawPWM %d\n", xPWM, yPWM, yawPWM);
-    Serial.printf("xTrim %d yTrim %d zTrim %d\n", xTrim, yTrim, zTrim);
-    Serial.printf("zVelOutput %.2f\n", zVelOutput);
-    Serial.printf("xPosSetpoint %.2f, yPosSetpoint %.2f, zPosSetpoint %.2f\n", xPosSetpoint, yPosSetpoint, zPosSetpoint);
-    Serial.printf("xPos %.2f, yPos %.2f, zPos %.2f\n", xPos, yPos, zPos);   
+    Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);
+    Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);   
   }
 
 
@@ -350,7 +381,6 @@ void loop() {
     // Serial.printf("Setpoint x: %f, y: %f, z: %f\n", xVelSetpoint, yVelSetpoint, zVelSetpoint);
     // Serial.printf("Pos x: %f, y: %f, z: %f\n", xVel, yVel, zPos);
     //Serial.printf("Output x: %f, y: %f, z: %f\n", xVelOutput, yVelOutput, zVelOutput);
-
     sbus_tx.data(data);
     sbus_tx.Write();
   }
