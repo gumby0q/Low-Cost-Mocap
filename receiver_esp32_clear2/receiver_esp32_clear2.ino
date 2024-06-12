@@ -203,12 +203,12 @@ void OnDataRecv(const uint8_t *incomingData, int len) {
     zPos = json["pos"][2];
     yawPos = json["pos"][3];
 
-    // xVel = json["vel"][0];
-    // yVel = json["vel"][1];
-    // zVel = json["vel"][2];
-    xVel = 0;
-    yVel = 0;
+    xVel = json["vel"][0];
+    yVel = json["vel"][1];
     zVel = json["vel"][2];
+    // xVel = 0;
+    // yVel = 0;
+    // zVel = json["vel"][2];
     // Serial.println("\n json pos vel!!! \n");
   } else if (json.containsKey("armed")) {
     if (json["armed"] != armed && json["armed"]) {
@@ -218,9 +218,10 @@ void OnDataRecv(const uint8_t *incomingData, int len) {
     armed = json["armed"];
     // Serial.printf("\narmed 2 %d \n", (uint8_t)armed);
   } else if (json.containsKey("setpoint")) {
-    // xPosSetpoint = json["setpoint"][0];
-    // yPosSetpoint = json["setpoint"][1];
-    // zPosSetpoint = json["setpoint"][2];
+    xPosSetpoint = json["setpoint"][0];
+    yPosSetpoint = json["setpoint"][1];
+    zPosSetpoint = json["setpoint"][2];
+    Serial.println("\n json SETPOINT!!! \n");
   } else if (json.containsKey("pid")) {
     Serial.println("\n json PID!!! \n");
     xPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
@@ -397,13 +398,13 @@ void pid_loop() {
   yVelPID.Compute();
   zVelPID.Compute();
 
-  // int xPWM = 992 + (xVelOutput * 811) + xTrim;
-  // int yPWM = 992 + (yVelOutput * 811) + yTrim;
+  int xPWM = 992 + (xVelOutput * 811) + xTrim;
+  int yPWM = 992 + (-yVelOutput * 811) + yTrim;
     
   // int xPWM = 992 /* + (xVelSetpoint * 811) */ + xTrim;
 
-  int xPWM = 992 + (xVelSetpoint * 811) + xTrim;
-  int yPWM = 992 + (-yVelSetpoint * 811) + yTrim;
+  // int xPWM = 992 + (xVelSetpoint * 811) + xTrim;
+  // int yPWM = 992 + (-yVelSetpoint * 811) + yTrim;
   int16_t zPWMshift = (Z_GAIN * zVelOutput * 811);
   int zPWM = zBase + zPWMshift + zTrim;
   int yawPWM = 992 + (yawPosOutput * 811) + yawTrim;
@@ -469,7 +470,8 @@ void pid_loop() {
 
 
   // if ((micros() - lastPrint) > /* us */ (500 * 1000)) {
-  if ((micros() - lastPrint) > /* us */ (100 * 1000)) {
+  // if ((micros() - lastPrint) > /* us */ (100 * 1000)) {
+  if ((micros() - lastPrint) > /* us */ (200 * 1000)) {
     lastPrint = micros();
     if (armed) {
       // Serial.printf("\narmed 3 yes %d %u %d zBase %d \n", (uint8_t)armed, data.ch[4], zVelOutput * 100, zBase);
@@ -540,6 +542,7 @@ void setup() {
   // Init Serial Monitor
   // Serial.begin(1000000);
   Serial.begin(250000);
+  // Serial.begin(500000);
 
   // csrf
   crsf.Begin();  

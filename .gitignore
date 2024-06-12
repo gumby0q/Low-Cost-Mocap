@@ -37,3 +37,4 @@ __pycache__
 
 my-env
 computer_code/cam_*
+!computer_code/cam_rules.sh

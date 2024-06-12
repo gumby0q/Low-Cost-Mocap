@@ -5,26 +5,14 @@ import matplotlib.pyplot as plt
 
 # Load the CSV file
 # csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-24_11:04:50_seria_data.csv'
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-24_13:49:34_seria_data.csv'
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-24_13:56:28_seria_data.csv'
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-24_13:59:27_seria_data.csv'
-
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-28_19:35:04_seria_data.csv'
 
 
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-28_19:54:01_seria_data.csv' # 1 pid
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-28_19:54:18_seria_data.csv' # 1 pid
+csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-31_13:23:59_seria_data.csv' 
+# csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-31_13:25:07_seria_data.csv' 
 
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-28_20:08:00_seria_data.csv' # low xy coeffs
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-28_20:15:03_seria_data.csv' # low xy 0.5 0.0001 0.02
-
-
-
-csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-31_11:29:49_seria_data.csv' # low xy 0.5 0.0001 0.02
-
-
-# xy pos 0.325 0.00001 0.0
-# -260 x trim
+# xy pos 0.325 0. 0.0
+# -260 x trim 
+# X Trim: -136 153
 
 
 data = pd.read_csv(csv_file_path)

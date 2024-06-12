@@ -50,9 +50,9 @@ cam_index = 1
 # cams = Camera(fps=90, resolution=Camera.RES_SMALL, colour=True, gain=10, exposure=100)
 # cams = Camera(fps=90, resolution=Camera.RES_SMALL, gain=10, exposure=100)
 # cams = Camera(fps=90, resolution=Camera.RES_SMALL, gain=10, exposure=100)
-# cams = Camera(fps=90, resolution=Camera.RES_SMALL)
+cams = Camera(fps=90, resolution=Camera.RES_SMALL)
 # cams = Camera(fps=90, resolution=Camera.RES_SMALL, exposure=10)
-cams = Camera(fps=60, resolution=Camera.RES_LARGE)
+# cams = Camera(fps=60, resolution=Camera.RES_LARGE)
 
 for i in range(30):  # Capture 10 images
     frame, timestamp = cams.read()

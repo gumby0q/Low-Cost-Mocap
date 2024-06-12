@@ -572,6 +572,48 @@ export default function App() {
     // }
   }
 
+  const moveToPosMy = async (pos: number[], droneIndex: number) => {
+    // console.log(filteredObjects.current[filteredObjects.current.length - 1][droneIndex])
+    console.warn("fix this shit 123!")
+    // const waypoints = [
+    //   /* todo: some bullshit!!!??? */
+    //   filteredObjects.current[filteredObjects.current.length - 1][droneIndex]["pos"].concat([true]),
+    //   pos.concat([true])
+    // ]
+    // const setpoints = await planTrajectory(
+    //   waypoints,
+    //   trajectoryPlanningMaxVel.map(x => parseFloat(x)),
+    //   trajectoryPlanningMaxAccel.map(x => parseFloat(x)),
+    //   trajectoryPlanningMaxJerk.map(x => parseFloat(x)),
+    //   TRAJECTORY_PLANNING_TIMESTEP
+    // )
+    const shiftXY = 0.35 
+    const setpoints = [
+      [0, 0, 0],
+
+      [shiftXY, 0, 0.4],
+      [0, 0, 0.5],
+      [-shiftXY, 0, 0.4],
+
+      [0, 0, 0],
+
+      [0, shiftXY, 0.4],
+      [0, 0, 0.5],
+      [0, -shiftXY, 0.4],
+
+      [0, 0, 0],
+
+      [0, 0, -0.4],
+    ];
+
+    for await (const [i, setpoint] of setpoints.entries()) {
+      const _setpoint = setpoint.map(x => x.toFixed(3))
+      console.log("set-drone-setpoint i", i, _setpoint);
+      socket.emit("set-drone-setpoint", { "droneSetpoint": _setpoint, droneIndex })
+      await wait(3 * 1000)
+    }
+  }
+
   const startLiveMocap = (startOrStop: string) => {
     socket.emit("triangulate-points", { startOrStop, cameraPoses, toWorldCoordsMatrix })
   }
@@ -832,7 +874,7 @@ export default function App() {
         </Col>
         <Col xs={4}>
           <Card className='shadow-sm p-3 h-100'>
-            <Row>
+            {/* <Row>
               <Col>
                 <h4>Generate Trajectory</h4>
               </Col>
@@ -952,13 +994,13 @@ export default function App() {
                   }}
                 />
               </Col>
-            </Row>
+            </Row> */}
             <Row className='pt-3'>
               <Col>
                 Waypoints <code>[drone index, x, y, z, stop at waypoint]</code>
               </Col>
             </Row>
-            <Row className='pt-1'>
+            {/* <Row className='pt-1'>
               <Col>
                 <Form.Control
                   as="textarea"
@@ -967,26 +1009,36 @@ export default function App() {
                   onChange={(event) => setTrajectoryPlanningWaypoints(event.target.value)}
                 />
               </Col>
-            </Row>
+            </Row> */}
             <Row className='pt-3'>
               <Col>
                 <Button
                   size='sm'
                   className='float-end'
                   variant={droneArmed ? "outline-danger" : "outline-primary"}
+                  // onClick={async () => {
+                  //   setMotionPreset(new Array(NUM_DRONES).fill("none"))
+                  //   const initPos = JSON.parse(trajectoryPlanningWaypoints)[0].slice(0, 3)
+                  //   await Promise.all(Array.from(Array(NUM_DRONES).keys()).map(async (droneIndex) => {
+                  //     await moveToPos(initPos, droneIndex)
+                  //   }))
+                  //   setTrajectoryPlanningRunStartTimestamp(Date.now() / 1000)
+                  //   setMotionPreset(new Array(NUM_DRONES).fill("plannedTrajectory"))
+                  // }}
                   onClick={async () => {
-                    setMotionPreset(new Array(NUM_DRONES).fill("none"))
-                    const initPos = JSON.parse(trajectoryPlanningWaypoints)[0].slice(0, 3)
-                    await Promise.all(Array.from(Array(NUM_DRONES).keys()).map(async (droneIndex) => {
-                      await moveToPos(initPos, droneIndex)
-                    }))
-                    setTrajectoryPlanningRunStartTimestamp(Date.now() / 1000)
-                    setMotionPreset(new Array(NUM_DRONES).fill("plannedTrajectory"))
+                    const initPos = [0 , 0, 0];
+                    await moveToPosMy(initPos, /* droneIndex */ 0);
+                    // setMotionPreset(new Array(NUM_DRONES).fill("none"))
+                    // const initPos = JSON.parse(trajectoryPlanningWaypoints)[0].slice(0, 3)
+                    // await Promise.all(Array.from(Array(NUM_DRONES).keys()).map(async (droneIndex) => {
+                    // }))
+                    // setTrajectoryPlanningRunStartTimestamp(Date.now() / 1000)
+                    // setMotionPreset(new Array(NUM_DRONES).fill("plannedTrajectory"))
                   }}
                 >
                   Run
                 </Button>
-                <Button
+                {/* <Button
                   size='sm'
                   className='float-end me-2'
                   variant={droneArmed ? "outline-danger" : "outline-primary"}
@@ -1002,7 +1054,7 @@ export default function App() {
                   }}
                 >
                   Preview
-                </Button>
+                </Button> */}
               </Col>
             </Row>
           </Card>
@@ -1128,9 +1180,9 @@ export default function App() {
                       onClick={async () => {
                         await moveToPos([0, 0, LAND_Z_HEIGHT], droneIndex)
 
-                        let newDroneArmed = droneArmed.slice()
-                        newDroneArmed[droneIndex] = false
-                        setDroneArmed(newDroneArmed);
+                        // let newDroneArmed = droneArmed.slice()
+                        // newDroneArmed[droneIndex] = false
+                        // setDroneArmed(newDroneArmed);
 
                         let newMotionPreset = motionPreset.slice()
                         newMotionPreset[droneIndex] = "setpoint"

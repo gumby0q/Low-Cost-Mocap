@@ -25,6 +25,7 @@ serialLock = threading.Lock()
 
 # serial_port_path = "/dev/cu.usbserial-02X2K2GE"
 # serial_port_speed = 1000000
+# serial_port_speed = 250000
 serial_port_speed = 250000
 
 serial_port_path = "/dev/ttyUSB0"
@@ -195,6 +196,8 @@ def arm_drone(data):
         "setpoint": [float(x) for x in data["droneSetpoint"]],
     }
     with serialLock:
+        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+        time.sleep(0.1)
         ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
         time.sleep(0.01)
 
