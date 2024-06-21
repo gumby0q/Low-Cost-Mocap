@@ -587,6 +587,7 @@ export default function App() {
     //   trajectoryPlanningMaxJerk.map(x => parseFloat(x)),
     //   TRAJECTORY_PLANNING_TIMESTEP
     // )
+
     const shiftXY = 0.35 
     const setpoints = [
       [0, 0, 0],

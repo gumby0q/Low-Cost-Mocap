@@ -91,7 +91,8 @@ char buffer[1024];
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
-#define batVoltagePin 34
+#define ALARM_PIN 34
+
 #define MAX_VEL 100
 // #define ROTOR_RADIUS 0.0225
 #define ROTOR_RADIUS 0.02
@@ -364,7 +365,15 @@ void pid_loop() {
     armed = false;
   }
 
-  if (armed) {
+  bool local_armed = armed;
+
+  int alarm = digitalRead(ALARM_PIN);
+
+  if (alarm != 0) {
+    local_armed = false;
+  }
+
+  if (local_armed) {
     // data.ch[4] = 1812;
     crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MAX;      //  CH 4 throttle
   } else {
@@ -411,16 +420,6 @@ void pid_loop() {
   double groundEffectMultiplier = 1 - groundEffectCoef*pow(((2*ROTOR_RADIUS) / (4*(zPos-groundEffectOffset))), 2);
   // zPWM *= max(0., groundEffectMultiplier);
   int _zPWM = zPWM * max(0., groundEffectMultiplier);
-  // if (armed) {
-  //   if ((millis() - timeArmed)) > 100) {
-      // zPWM = _zPWM;
-  //   } else {
-  //     zPWM = 172;
-  //   }
-  // } else {
-  //   zPWM = 172;
-  // }
-  // zPWM = (armed && (millis() - timeArmed)) > 100 ? _zPWM : 172;
 
   if (zPWM < 173) {
     zPWM = 173;
@@ -473,7 +472,7 @@ void pid_loop() {
   // if ((micros() - lastPrint) > /* us */ (100 * 1000)) {
   if ((micros() - lastPrint) > /* us */ (200 * 1000)) {
     lastPrint = micros();
-    if (armed) {
+    if (local_armed) {
       // Serial.printf("\narmed 3 yes %d %u %d zBase %d \n", (uint8_t)armed, data.ch[4], zVelOutput * 100, zBase);
       // Serial.printf("\narmed 3 yes %d\n", (uint8_t)armed);
     } else {
@@ -560,6 +559,7 @@ void setup() {
 
   /* led for indicating transmition */
   pinMode(2, OUTPUT);
+  pinMode(ALARM_PIN, INPUT);
 
   Serial.println("setup finish");
 }
