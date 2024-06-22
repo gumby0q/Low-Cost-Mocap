@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-31_13:23:59_seria_data.csv' 
 # csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-05-31_13:25:07_seria_data.csv' 
+csv_file_path = '/home/anatolii/projects/Low-Cost-Mocap/computer_code/api/csv_data/2024-06-22_15:09:31_seria_data.csv' 
 
 # xy pos 0.325 0. 0.0
 # -260 x trim 

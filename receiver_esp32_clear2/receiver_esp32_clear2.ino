@@ -183,75 +183,211 @@ float sbusFrequency = 50.0;
 // -------------------------------------------------------------------------------
 
 
+/* -------------------------------------------------------------- incoming data >>> */
 
 
-// callback function that will be executed when data is received
-// void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-void OnDataRecv(const uint8_t *incomingData, int len) {
-  // Serial.println((char*)incomingData);
-  DeserializationError err = deserializeJson(json, (char *)incomingData);
+// // callback function that will be executed when data is received
+// // void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+// void OnDataRecv(const uint8_t *incomingData, int len) {
+//   // Serial.println((char*)incomingData);
+//   DeserializationError err = deserializeJson(json, (char *)incomingData);
 
-  // Serial.println("\n incoming packet \n");
+//   // Serial.println("\n incoming packet \n");
 
-  if (err) {
-    Serial.print("failed to parse json");
-    return;
-  }
+//   if (err) {
+//     Serial.print("failed to parse json");
+//     return;
+//   }
 
-  if (json.containsKey("pos") && json.containsKey("vel")) {
-    xPos = json["pos"][0];
-    yPos = json["pos"][1];
-    zPos = json["pos"][2];
-    yawPos = json["pos"][3];
+//   if (json.containsKey("pos") && json.containsKey("vel")) {
+//     xPos = json["pos"][0];
+//     yPos = json["pos"][1];
+//     zPos = json["pos"][2];
+//     yawPos = json["pos"][3];
 
-    xVel = json["vel"][0];
-    yVel = json["vel"][1];
-    zVel = json["vel"][2];
-    // xVel = 0;
-    // yVel = 0;
-    // zVel = json["vel"][2];
-    // Serial.println("\n json pos vel!!! \n");
-  } else if (json.containsKey("armed")) {
-    if (json["armed"] != armed && json["armed"]) {
-      timeArmed = millis();
+//     xVel = json["vel"][0];
+//     yVel = json["vel"][1];
+//     zVel = json["vel"][2];
+//     // xVel = 0;
+//     // yVel = 0;
+//     // zVel = json["vel"][2];
+//     // Serial.println("\n json pos vel!!! \n");
+//   } else if (json.containsKey("armed")) {
+//     if (json["armed"] != armed && json["armed"]) {
+//       timeArmed = millis();
+//     }
+//     // Serial.printf("\narmed 1 %d \n", (uint8_t)armed);
+//     armed = json["armed"];
+//     // Serial.printf("\narmed 2 %d \n", (uint8_t)armed);
+//   } else if (json.containsKey("setpoint")) {
+//     xPosSetpoint = json["setpoint"][0];
+//     yPosSetpoint = json["setpoint"][1];
+//     zPosSetpoint = json["setpoint"][2];
+//     Serial.println("\n json SETPOINT!!! \n");
+//   } else if (json.containsKey("pid")) {
+//     Serial.println("\n json PID!!! \n");
+//     xPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
+//     yPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
+//     zPosPID.SetTunings(json["pid"][3], json["pid"][4], json["pid"][5]);
+//     yawPosPID.SetTunings(json["pid"][6], json["pid"][7], json["pid"][8]);
+
+//     xVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
+//     yVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
+//     zVelPID.SetTunings(json["pid"][12], json["pid"][13], json["pid"][14]);
+
+//     groundEffectCoef = json["pid"][15];
+//     groundEffectOffset = json["pid"][16];
+//   } else if (json.containsKey("trim")) {
+//     Serial.println("\n json TRIM!!! \n");
+//     xTrim = json["trim"][0];
+//     yTrim = json["trim"][1];
+//     zTrim = json["trim"][2];
+//     yawTrim = json["trim"][3];
+//   }
+
+//   lastPing = micros();
+
+// }
+
+
+#define M_HEADER_0 0xba
+#define M_HEADER_1 0xcc
+
+#define M_ID_POS_VEL    0x01
+#define M_ID_ARMED      0x02
+#define M_ID_SETPOINT   0x03
+#define M_ID_PID        0x04
+#define M_ID_TRIM       0x05
+
+// Define the polynomial for CRC-8
+#define POLYNOMIAL 0x07
+
+// Function to compute the CRC-8 checksum
+uint8_t crc8(const uint8_t *data, size_t length) {
+    uint8_t crc = 0x00; // Initial value
+
+    for (size_t i = 0; i < length; i++) {
+        crc ^= data[i]; // XOR the data byte with the CRC
+
+        for (uint8_t j = 0; j < 8; j++) {
+            if (crc & 0x80) {
+                crc = (crc << 1) ^ POLYNOMIAL; // Shift left and XOR with the polynomial
+            } else {
+                crc <<= 1; // Just shift left
+            }
+        }
     }
-    // Serial.printf("\narmed 1 %d \n", (uint8_t)armed);
-    armed = json["armed"];
-    // Serial.printf("\narmed 2 %d \n", (uint8_t)armed);
-  } else if (json.containsKey("setpoint")) {
-    xPosSetpoint = json["setpoint"][0];
-    yPosSetpoint = json["setpoint"][1];
-    zPosSetpoint = json["setpoint"][2];
-    Serial.println("\n json SETPOINT!!! \n");
-  } else if (json.containsKey("pid")) {
-    Serial.println("\n json PID!!! \n");
-    xPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
-    yPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
-    zPosPID.SetTunings(json["pid"][3], json["pid"][4], json["pid"][5]);
-    yawPosPID.SetTunings(json["pid"][6], json["pid"][7], json["pid"][8]);
 
-    xVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
-    yVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
-    zVelPID.SetTunings(json["pid"][12], json["pid"][13], json["pid"][14]);
-
-    groundEffectCoef = json["pid"][15];
-    groundEffectOffset = json["pid"][16];
-  } else if (json.containsKey("trim")) {
-    Serial.println("\n json TRIM!!! \n");
-    xTrim = json["trim"][0];
-    yTrim = json["trim"][1];
-    zTrim = json["trim"][2];
-    yawTrim = json["trim"][3];
-  } else if (json.containsKey("pwm")) {
-    // xPWM = json["pwm"][0];  
-    // yPWM = json["pwm"][1];
-    // zPWM = json["pwm"][2];
-    // yawPWM = json["pwm"][3];
-  }
-
-  lastPing = micros();
+    return crc;
 }
 
+// Function to convert an array of uint8_t to a float
+float array_to_float(uint8_t *buff) {
+    // Pointer to float that points to the same memory location as the input buffer
+    float result;
+    uint8_t *floatPointer = (uint8_t *)&result;
+
+    // Serial.printf("\n");
+    // Copy the bytes from the buffer to the float variable
+    for (int i = 0; i < 4; i++) {
+        floatPointer[i] = buff[i];
+        // Serial.printf("\n buff %d \n", buff[i]);
+    }
+    // Serial.printf("\n result %f \n", result);
+
+    return result;
+}
+
+// callback function that will be executed when data is received
+
+void OnDataRecv(const uint8_t *incomingData, int len) {
+  if (incomingData[0] == M_HEADER_0) {
+    if (incomingData[1] == M_HEADER_1) {
+      uint8_t checksum = incomingData[len-1];
+      uint8_t _checksum = crc8(incomingData, len-1);
+
+      if (_checksum == checksum) {
+        uint8_t id = incomingData[2];
+
+        /* position and velocity */
+        if (id == M_ID_POS_VEL) {
+          xPos = array_to_float((uint8_t*)&incomingData[3 + 0 * 4]);
+          yPos = array_to_float((uint8_t*)&incomingData[3 + 1 * 4]);
+          zPos = array_to_float((uint8_t*)&incomingData[3 + 2 * 4]);
+          yawPos = array_to_float((uint8_t*)&incomingData[3 + 3 * 4]);
+
+          xVel = array_to_float((uint8_t*)&incomingData[3 + 4 * 4]);;
+          yVel = array_to_float((uint8_t*)&incomingData[3 + 5 * 4]);
+          zVel = array_to_float((uint8_t*)&incomingData[3 + 6 * 4]);
+
+          // Serial.printf("\n xPos!!! %f %f %f %f\n", xPos, yPos, zPos, yawPos);
+          // Serial.printf("\n xVel!!! %f %f %f\n", xVel, yVel, zVel);
+        }
+
+        /* armed */
+        if (id == M_ID_ARMED) {
+          uint8_t status = incomingData[3];
+          if (status != armed && status) {
+            timeArmed = millis();
+          }
+
+          armed = status;
+        }
+
+        /* setpoint */
+        if (id == M_ID_SETPOINT) {
+          xPosSetpoint = array_to_float((uint8_t*)&incomingData[3 + 0 * 4]);
+          yPosSetpoint = array_to_float((uint8_t*)&incomingData[3 + 1 * 4]);
+          zPosSetpoint = array_to_float((uint8_t*)&incomingData[3 + 2 * 4]);
+
+          // Serial.printf("\n SETPOINT!!! %f %f %f\n", xPosSetpoint, yPosSetpoint, zPosSetpoint);
+          Serial.println("\n SETPOINT!!! \n");
+        }
+
+        /* pid */
+        if (id == M_ID_PID) {
+          xPosPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 0 * 4]), array_to_float((uint8_t*)&incomingData[3 + 1 * 4]), array_to_float((uint8_t*)&incomingData[3 + 2 * 4]));
+          yPosPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 0 * 4]), array_to_float((uint8_t*)&incomingData[3 + 1 * 4]), array_to_float((uint8_t*)&incomingData[3 + 2 * 4]));
+          zPosPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 3 * 4]), array_to_float((uint8_t*)&incomingData[3 + 4 * 4]), array_to_float((uint8_t*)&incomingData[3 + 5 * 4]));
+          yawPosPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 6 * 4]), array_to_float((uint8_t*)&incomingData[3 + 7 * 4]), array_to_float((uint8_t*)&incomingData[3 + 8 * 4]));
+
+          xVelPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 9 * 4]), array_to_float((uint8_t*)&incomingData[3 + 10 * 4]), array_to_float((uint8_t*)&incomingData[3 + 11 * 4]));
+          yVelPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 9 * 4]), array_to_float((uint8_t*)&incomingData[3 + 10 * 4]), array_to_float((uint8_t*)&incomingData[3 + 11 * 4]));
+          zVelPID.SetTunings(array_to_float((uint8_t*)&incomingData[3 + 12 * 4]), array_to_float((uint8_t*)&incomingData[3 + 13 * 4]), array_to_float((uint8_t*)&incomingData[3 + 14 * 4]));
+
+          groundEffectCoef = array_to_float((uint8_t*)&incomingData[3 + 15 * 4]);
+          groundEffectOffset = array_to_float((uint8_t*)&incomingData[3 + 16 * 4]);
+
+          Serial.println("\n PID!!! \n");
+          // Serial.printf("\n xPosPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 0 * 4]), array_to_float((uint8_t*)&incomingData[3 + 1 * 4]), array_to_float((uint8_t*)&incomingData[3 + 2 * 4]));
+          // Serial.printf("\n zPosPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 3 * 4]), array_to_float((uint8_t*)&incomingData[3 + 4 * 4]), array_to_float((uint8_t*)&incomingData[3 + 5 * 4]));
+          // Serial.printf("\n xVelPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 9 * 4]), array_to_float((uint8_t*)&incomingData[3 + 10 * 4]), array_to_float((uint8_t*)&incomingData[3 + 11 * 4]));
+          // Serial.printf("\n zVelPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 12 * 4]), array_to_float((uint8_t*)&incomingData[3 + 13 * 4]), array_to_float((uint8_t*)&incomingData[3 + 14 * 4]));
+          // Serial.printf("\n groundEffectCoef!!! %f \n", groundEffectCoef);
+          // Serial.printf("\n groundEffectOffset!!! %f \n", groundEffectOffset);
+        }
+
+        /* trim */
+        if (id == M_ID_TRIM) {
+          xTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 0 * 4]);
+          yTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 1 * 4]);
+          zTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 2 * 4]);
+          yawTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 3 * 4]);
+
+          // Serial.printf("\n TRIM!!! %i %i %i\n", xTrim, yTrim, zTrim);
+          Serial.println("\n TRIM!!! \n");
+        }
+
+
+        lastPing = micros();
+      } else {
+        Serial.println("\n bad checksum!!! \n");
+      }
+    }
+  }
+}
+
+/* -------------------------------------------------------------- incoming data <<< */
 
 void resetPid(PID &pid, double min, double max) {
   pid.SetOutputLimits(0.0, 1.0); 
@@ -325,22 +461,26 @@ void pid_setup() {
 void input_data_loop() {
   int availableBytes = Serial.available();
   if (availableBytes) {
-    int droneIndex = Serial.read() - '0';
-    Serial.readBytes(buffer, availableBytes-1);
-    buffer[availableBytes-1] = '\0';
-    // Serial.printf("\n drone index %d: ", droneIndex);
-    // Serial.print(buffer);
+    // int droneIndex = Serial.read() - '0';
+    // Serial.readBytes(buffer, availableBytes-1);
+    // buffer[availableBytes-1] = '\0';
 
-    // esp_err_t result = esp_now_send(broadcastAddresses[droneIndex], (uint8_t *)&buffer, strlen(buffer) + 1);
-    // if (result) {
-    //   Serial.println(esp_err_to_name(result));
-    // } else {
-    //   digitalWrite(2, !digitalRead(2));
-    // }
+    // // Serial.printf("\n drone index %d: ", droneIndex);
+    // // Serial.print(buffer);
 
-    // need to parse data and what?
+    // // esp_err_t result = esp_now_send(broadcastAddresses[droneIndex], (uint8_t *)&buffer, strlen(buffer) + 1);
+    // // if (result) {
+    // //   Serial.println(esp_err_to_name(result));
+    // // } else {
+    // //   digitalWrite(2, !digitalRead(2));
+    // // }
 
-    OnDataRecv((uint8_t *)&buffer, strlen(buffer) + 1);
+    // // need to parse data and what?
+    // OnDataRecv((uint8_t *)&buffer, strlen(buffer) + 1);
+
+
+    Serial.readBytes(buffer, availableBytes);
+    OnDataRecv((uint8_t *)&buffer, availableBytes);
 
     digitalWrite(2, !digitalRead(2));
   } else {

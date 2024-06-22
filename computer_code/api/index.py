@@ -17,9 +17,11 @@ from flask_cors import CORS
 import json
 
 from TestFlight import TestFlightBaseComponent, TestFlightMediator
+import serialHelpers as sH
 import csv
 from datetime import datetime
 from Componnents import CalculationLoopC, CamerasC, SerialPortC, SocketIOC, DataProcessor
+
 
 serialLock = threading.Lock()
 
@@ -167,48 +169,82 @@ def arm_drone(data):
     
     # print("drone ", data)
     Cameras.instance().drone_armed = data["droneArmed"]
-    for droneIndex in range(0, num_objects):
-        armed_status = data["droneArmed"][droneIndex]
-        serial_data = {
-            "armed": armed_status,
-        }
-        with serialLock:
-            ser.write(f"{str(droneIndex)}{json.dumps(serial_data)}".encode('utf-8'))
+    # for droneIndex in range(0, num_objects):
+    #     armed_status = data["droneArmed"][droneIndex]
+    #     serial_data = {
+    #         "armed": armed_status,
+    #     }
+    #     with serialLock:
+    #         ser.write(f"{str(droneIndex)}{json.dumps(serial_data)}".encode('utf-8'))
         
-        # custom logic
-        if droneIndex == 0:
-            tfMediator.notify("socket_api", "armed_0", armed_status)
-        time.sleep(0.01)
+    #     # custom logic
+    #     if droneIndex == 0:
+    #         tfMediator.notify("socket_api", "armed_0", armed_status)
+    #     time.sleep(0.01)
+
+    # custom logic
+    droneIndex = 0
+    armed_status = data["droneArmed"][droneIndex]
+
+    tfMediator.notify("socket_api", "armed_0", armed_status)
+
+    serial_data = sH.pack_armed_data_for_serial(sH.M_ID_ARMED, armed_status)
+    with serialLock:
+        ser.write(serial_data)
+    time.sleep(0.01)
+
 
 @socketio.on("set-drone-pid")
 def arm_drone(data):
     print("data", data)
-    serial_data = {
-        "pid": [float(x) for x in data["dronePID"]],
-    }
+    # serial_data = {
+    #     "pid": [float(x) for x in data["dronePID"]],
+    # }
+    # with serialLock:
+    #     ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+    #     time.sleep(0.01)
+    
+    _floats = [float(x) for x in data["dronePID"]]
+    serial_data = sH.pack_floats_data_for_serial(sH.M_ID_PID, _floats)
     with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+        ser.write(serial_data)
         time.sleep(0.01)
 
 @socketio.on("set-drone-setpoint")
 def arm_drone(data):
-    serial_data = {
-        "setpoint": [float(x) for x in data["droneSetpoint"]],
-    }
+    # serial_data = {
+    #     "setpoint": [float(x) for x in data["droneSetpoint"]],
+    # }
+    # with serialLock:
+    #     ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+    #     time.sleep(0.1)
+    #     ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+    #     time.sleep(0.01)
+
+    _floats = [float(x) for x in data["droneSetpoint"]]
+    serial_data = sH.pack_floats_data_for_serial(sH.M_ID_SETPOINT, _floats)
     with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
-        time.sleep(0.1)
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+        ser.write(serial_data)
         time.sleep(0.01)
+
 
 @socketio.on("set-drone-trim")
 def arm_drone(data):
-    serial_data = {
-        "trim": [int(x) for x in data["droneTrim"]],
-    }
+    # serial_data = {
+    #     "trim": [int(x) for x in data["droneTrim"]],
+    # }
+    # with serialLock:
+    #     ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+    #     time.sleep(0.01)
+
+    _floats = [float(x) for x in data["droneTrim"]]
+    # print("trinm ", _floats)
+    serial_data = sH.pack_floats_data_for_serial(sH.M_ID_TRIM, _floats)
+    # print("serial_data ", serial_data)
     with serialLock:
-        ser.write(f"{str(data['droneIndex'])}{json.dumps(serial_data)}".encode('utf-8'))
+        ser.write(serial_data)
         time.sleep(0.01)
+
 # ----------------------------------------------------------------------------- drone things <<<<
 
 

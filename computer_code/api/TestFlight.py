@@ -9,7 +9,7 @@ import numpy as np
 import cv2 as cv
 from KalmanFilter import KalmanFilter
 import tkinter as tk
-
+import serialHelpers as sH
 
 class Mediator:
     """
@@ -188,12 +188,21 @@ class TestFlightMediator(Mediator):
         
         # dt is about 11 ms 0.011 absolute value
         
-        serial_data = { 
-            "pos": [round(x, 4) for x in filtered_object["pos"]] + [filtered_object["heading"]],
-            "vel": [round(x, 4) for x in filtered_object["vel"]]
-        }
+        # serial_data = { 
+        #     "pos": [round(x, 4) for x in filtered_object["pos"]] + [filtered_object["heading"]],
+        #     "vel": [round(x, 4) for x in filtered_object["vel"]]
+        # }
+        # with serialLock:
+        #     serial.write(f"{filtered_object['droneIndex']}{json.dumps(serial_data)}".encode('utf-8'))
+        #     time.sleep(0.001)
+
+        # _floats = [round(x, 4) for x in filtered_object["pos"]] + [filtered_object["heading"]] + [round(x, 4) for x in filtered_object["vel"]]
+        _floats = [float(x) for x in filtered_object["pos"]] + [float(filtered_object["heading"])] + [float(x) for x in filtered_object["vel"]]
+        # print('_floats', _floats)
+
+        serial_data = sH.pack_floats_data_for_serial(sH.M_ID_POS_VEL, _floats)
         with serialLock:
-            serial.write(f"{filtered_object['droneIndex']}{json.dumps(serial_data)}".encode('utf-8'))
+            serial.write(serial_data)
             time.sleep(0.001)
 
         return 0
