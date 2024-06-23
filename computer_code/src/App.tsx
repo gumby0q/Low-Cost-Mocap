@@ -180,10 +180,10 @@ export default function App() {
 
   const [currentDroneIndex, setCurrentDroneIndex] = useState(0)
   const [droneArmed, setDroneArmed] = useState(Array.apply(null, Array(NUM_DRONES)).map(() => (false)))
-  const [dronePID, setDronePID] = useState(["1", "0", "0", "1.5", "0", "0", "0.3", "0.1", "0.05", "0.2", "0.03", "0.05", "0.3", "0.1", "0.05", "28", "-0.035"])
+  const [dronePID, setDronePID] = useState(LocalStorageAPI.getItem("drone_pid") || ["1", "0", "0", "1.5", "0", "0", "0.3", "0.1", "0.05", "0.2", "0.03", "0.05", "0.3", "0.1", "0.05", "28", "-0.035"])
   const [droneSetpoint, setDroneSetpoint] = useState(Array.apply(null, Array(NUM_DRONES)).map(() => (["0", "0", "0"])))
   const [droneSetpointWithMotion, setDroneSetpointWithMotion] = useState([0, 0, 0])
-  const [droneTrim, setDroneTrim] = useState(["0", "0", "0", "0"])
+  const [droneTrim, setDroneTrim] = useState(LocalStorageAPI.getItem("drone_trim") || ["0", "0", "0", "0"])
 
   const [motionPreset, setMotionPreset] = useState(["setpoint", "setpoint"])
 
@@ -266,7 +266,7 @@ export default function App() {
     }
   }, [droneArmed])
 
-  useEffect(() => {
+  useEffect(() => {   
     for (let droneIndex = 0; droneIndex < NUM_DRONES; droneIndex++) {
       socket.emit("set-drone-pid", { dronePID, droneIndex })
     }
@@ -997,11 +997,11 @@ export default function App() {
                 />
               </Col>
             </Row> */}
-            <Row className='pt-3'>
+            {/* <Row className='pt-3'>
               <Col>
                 Waypoints <code>[drone index, x, y, z, stop at waypoint]</code>
               </Col>
-            </Row>
+            </Row> */}
 
             {/* <Row className='pt-1'>
               <Col>
@@ -1014,6 +1014,7 @@ export default function App() {
               </Col>
             </Row> */}
             <Row className='pt-3'>
+              <Col>Test flight</Col>
               <Col>
                 <Button
                   size='sm'
@@ -1071,12 +1072,12 @@ export default function App() {
               <Col xs="auto">
                 <h4>Control Drone</h4>
               </Col>
-              <Col xs="3">
+              {/* <Col xs="3">
                 <Form.Select value={currentDroneIndex} onChange={(e) => setCurrentDroneIndex(parseInt(e.target.value))} size='sm'>
                   <option value="0">Drone 0</option>
                   <option value="1">Drone 1</option>
                 </Form.Select>
-              </Col>
+              </Col> */}
             </Row>
             {Array.from(Array(NUM_DRONES).keys()).map((droneIndex) => (
               <div key={"drone" + droneIndex.toString()}>
@@ -1222,6 +1223,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[0] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1232,6 +1234,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[1] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1242,6 +1245,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[2] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1257,6 +1261,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[3] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1267,6 +1272,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[4] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1277,6 +1283,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[5] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1292,6 +1299,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[6] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1302,6 +1310,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[7] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1312,6 +1321,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[8] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1338,6 +1348,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[9] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1348,6 +1359,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[10] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1358,6 +1370,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[11] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1373,6 +1386,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[12] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1383,6 +1397,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[13] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1393,6 +1408,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[14] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1408,6 +1424,7 @@ export default function App() {
                     <Form.Range value={droneTrim[0]} min={-800} max={800} onChange={(event) => {
                       let newDroneTrim = droneTrim.slice()
                       newDroneTrim[0] = event.target.value
+                      LocalStorageAPI.setItem("drone_trim", newDroneTrim)
                       setDroneTrim(newDroneTrim)
                     }} />
                   </Col>
@@ -1420,6 +1437,7 @@ export default function App() {
                     <Form.Range value={droneTrim[1]} min={-800} max={800} onChange={(event) => {
                       let newDroneTrim = droneTrim.slice()
                       newDroneTrim[1] = event.target.value
+                      LocalStorageAPI.setItem("drone_trim", newDroneTrim)
                       setDroneTrim(newDroneTrim)
                     }} />
                   </Col>
@@ -1432,6 +1450,7 @@ export default function App() {
                     <Form.Range value={droneTrim[2]} min={-800} max={800} onChange={(event) => {
                       let newDroneTrim = droneTrim.slice()
                       newDroneTrim[2] = event.target.value
+                      LocalStorageAPI.setItem("drone_trim", newDroneTrim)
                       setDroneTrim(newDroneTrim)
                     }} />
                   </Col>
@@ -1444,6 +1463,7 @@ export default function App() {
                     <Form.Range value={droneTrim[3]} min={-800} max={800} onChange={(event) => {
                       let newDroneTrim = droneTrim.slice()
                       newDroneTrim[3] = event.target.value
+                      LocalStorageAPI.setItem("drone_trim", newDroneTrim)
                       setDroneTrim(newDroneTrim)
                     }} />
                   </Col>
@@ -1460,6 +1480,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[15] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />
@@ -1473,6 +1494,7 @@ export default function App() {
                   onChange={(event) => {
                     let newDronePID = dronePID.slice()
                     newDronePID[16] = event.target.value
+                    LocalStorageAPI.setItem("drone_pid", newDronePID)
                     setDronePID(newDronePID)
                   }}
                 />

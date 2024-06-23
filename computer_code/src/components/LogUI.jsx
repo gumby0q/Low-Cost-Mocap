@@ -74,7 +74,7 @@ const LogUI = () => {
                 <h4>System Logs</h4>
                 <button onClick={clearLogs}>Clear Logs</button>
             </div>
-            <p>Check PID and TRIM settings logs...</p>
+            <p>Check if PID and TRIM settings logs is OK!</p>
             <div className="log-content" ref={logContentRef}>
                 {logs.map((log, index) => {
                         const logStyle = log.message.includes("ERROR") ? 'error' : 'ok';
