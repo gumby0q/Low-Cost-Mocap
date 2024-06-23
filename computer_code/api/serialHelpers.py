@@ -11,6 +11,13 @@ M_ID_SETPOINT = 0x03
 M_ID_PID = 0x04
 M_ID_TRIM = 0x05
 
+M_ID_SETTINGS_CHEKSUM =     200
+# M_ID_SETTINGS_POS_VEL  =    201  # sending countinuosly
+# M_ID_SETTINGS_ARMED  =      202  # sending countinuosly
+# M_ID_SETTINGS_SETPOINT  =   203  # sending countinuosly
+M_ID_SETTINGS_PID  =        204
+M_ID_SETTINGS_TRIM  =       205
+
 
 def crc8(data):
     POLYNOMIAL = 0x07
@@ -128,6 +135,79 @@ def pack_armed_data_for_serial(message_id, armed):
 
     return byte_array
 
+
+def make_dict_error(message_lable, error_code):
+    if error_code == 0x00:
+        return {"type": "SETTINGS_LOG", "data": message_lable + " OK"}
+    else:
+        return {"type": "SETTINGS_ERROR", "data": message_lable + " ERROR"}
+
+
+def crc_index_by_id(id):
+    bit4ids = [
+        M_ID_SETTINGS_CHEKSUM,
+        M_ID_SETTINGS_PID,
+        M_ID_SETTINGS_TRIM,
+    ]
+
+    is_present = id in bit4ids
+    if is_present:
+        return 4
+
+    return 0
+
+
+def parse_serial_log_data(data):
+    if len(data) < 6:  # Minimum length with no payload
+        return {"type": "HEADER_ERROR", "data": "Invalid length"}
+
+    if data[0] != M_HEADER_0 or data[1] != M_HEADER_1:
+        return {"type": "HEADER_ERROR", "data": "Invalid header"}
+
+    message_id = data[2]
+
+    checksum_index = crc_index_by_id(message_id)
+    checksum = data[checksum_index]
+
+    calculated_checksum = crc8(data[:checksum_index])
+    # print("checksum_index", checksum_index)
+    # print("data", data)
+    # print("calculated_checksum 0x{0:02x} sss ".format(calculated_checksum), calculated_checksum, checksum)
+    if checksum != calculated_checksum:
+        return {"type": "ERROR", "data": "PC income checksum"}
+
+
+    error_code = data[3]
+    # payload = data[3:-2]
+    if message_id == M_ID_SETTINGS_CHEKSUM:
+        # floats = struct.unpack('<' + 'f' * (len(payload) // 4), payload)
+        return {"type": "ERROR", "data": "Invalid checksum on device"}
+
+    # elif message_id == 201:
+    #     message_lable = "POS_VEL"
+    #     make_dict_error(message_lable, error_code)
+    
+    # elif message_id == 202:
+    #     message_lable = "ARMED"
+    #     make_dict_error(message_lable, error_code)
+
+    # elif message_id == 203:
+    #     message_lable = "SETPOINT"
+    #     make_dict_error(message_lable, error_code)
+
+    elif message_id == M_ID_SETTINGS_PID:
+        message_lable = "PID"
+        return make_dict_error(message_lable, error_code)
+        
+
+    elif message_id == M_ID_SETTINGS_TRIM:
+        message_lable = "TRIM"
+        return make_dict_error(message_lable, error_code)
+        
+
+    # Add more message ID handling as needed
+
+    return {"type": "UNKNOWN", "data": "Unknown message ID"}
 
 
 if __name__ == '__main__':

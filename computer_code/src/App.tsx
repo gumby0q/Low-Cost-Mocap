@@ -17,6 +17,7 @@ import Objects from './components/Objects';
 // import Chart from './components/chart';
 
 import LiveLineCharts, { OpenNewWindow } from './components/LiveLineCharts';
+import LogUI from './components/LogUI';
 import TrajectoryPlanningSetpoints from './components/TrajectoryPlanningSetpoints';
 import { useThreeDataStore } from './components/ThreeDataStore';
 
@@ -1001,6 +1002,7 @@ export default function App() {
                 Waypoints <code>[drone index, x, y, z, stop at waypoint]</code>
               </Col>
             </Row>
+
             {/* <Row className='pt-1'>
               <Col>
                 <Form.Control
@@ -1057,6 +1059,9 @@ export default function App() {
                   Preview
                 </Button> */}
               </Col>
+            </Row>
+            <Row className='pt-3'>
+              <LogUI />
             </Row>
           </Card>
         </Col>

@@ -253,14 +253,31 @@ float sbusFrequency = 50.0;
 #define M_HEADER_0 0xba
 #define M_HEADER_1 0xcc
 
+
+// Error codes
+#define M_ERROR_OK 0x00
+#define M_ERROR_GENERIC 0x01
+
+
+#define M_ID_SETTINGS_CHEKSUM 200
+// #define M_ID_SETTINGS_POS_VEL    201  // sending countinuosly
+// #define M_ID_SETTINGS_ARMED      202  // sending countinuosly
+// #define M_ID_SETTINGS_SETPOINT   203  // sending countinuosly
+#define M_ID_SETTINGS_PID        204
+#define M_ID_SETTINGS_TRIM       205
+
 #define M_ID_POS_VEL    0x01
 #define M_ID_ARMED      0x02
 #define M_ID_SETPOINT   0x03
 #define M_ID_PID        0x04
 #define M_ID_TRIM       0x05
 
+
 // Define the polynomial for CRC-8
 #define POLYNOMIAL 0x07
+
+
+
 
 // Function to compute the CRC-8 checksum
 uint8_t crc8(const uint8_t *data, size_t length) {
@@ -281,21 +298,61 @@ uint8_t crc8(const uint8_t *data, size_t length) {
     return crc;
 }
 
+
+// Function to pack and send data
+// void send_status_log(uint8_t message_id, const float *data, size_t data_len, uint8_t error_code) {
+void send_status_log(uint8_t message_id, uint8_t error_code) {
+    uint8_t buffer[64];
+    uint8_t pos = 0;
+
+    // Add headers
+    buffer[pos++] = M_HEADER_0;
+    buffer[pos++] = M_HEADER_1;
+    
+    // Add message ID
+    buffer[pos++] = message_id;
+
+    // // Add data payload (float values)
+    // for (size_t i = 0; i < data_len; i++) {
+    //     memcpy(&buffer[pos], &data[i], sizeof(float));
+    //     pos += sizeof(float);
+    // }
+
+    // Add error code
+    buffer[pos++] = error_code;
+
+    // Calculate and add CRC-8 checksum
+    uint8_t checksum = crc8(buffer, pos);
+    buffer[pos++] = checksum;
+
+    // Send the buffer via Serial
+    Serial.write(buffer, pos);
+}
+
 // Function to convert an array of uint8_t to a float
-float array_to_float(uint8_t *buff) {
-    // Pointer to float that points to the same memory location as the input buffer
-    float result;
-    uint8_t *floatPointer = (uint8_t *)&result;
+// float array_to_float(uint8_t *buff) {
+//     // Pointer to float that points to the same memory location as the input buffer
+//     float result;
+//     uint8_t *floatPointer = (uint8_t *)&result;
 
-    // Serial.printf("\n");
-    // Copy the bytes from the buffer to the float variable
-    for (int i = 0; i < 4; i++) {
-        floatPointer[i] = buff[i];
-        // Serial.printf("\n buff %d \n", buff[i]);
-    }
-    // Serial.printf("\n result %f \n", result);
+//     // Serial.printf("\n");
+//     // Copy the bytes from the buffer to the float variable
+//     for (int i = 0; i < 4; i++) {
+//         floatPointer[i] = buff[i];
+//         // Serial.printf("\n buff %d \n", buff[i]);
+//     }
+//     // Serial.printf("\n result %f \n", result);
 
-    return result;
+//     return result;
+// }
+
+float array_to_float(const uint8_t *buff) {
+    uint32_t as_int = ((uint32_t)buff[0]) |
+                      ((uint32_t)buff[1] << 8) |
+                      ((uint32_t)buff[2] << 16) |
+                      ((uint32_t)buff[3] << 24);
+
+    return *((float*)&as_int);
 }
 
 // callback function that will be executed when data is received
@@ -341,7 +398,8 @@ void OnDataRecv(const uint8_t *incomingData, int len) {
           zPosSetpoint = array_to_float((uint8_t*)&incomingData[3 + 2 * 4]);
 
           // Serial.printf("\n SETPOINT!!! %f %f %f\n", xPosSetpoint, yPosSetpoint, zPosSetpoint);
-          Serial.println("\n SETPOINT!!! \n");
+          // Serial.println("\n SETPOINT!!! \n");
+          // Serial.printf("{\"type\":\"SET_LOG\",\"data\":\"SETPOINT OK\"}");
         }
 
         /* pid */
@@ -358,7 +416,9 @@ void OnDataRecv(const uint8_t *incomingData, int len) {
           groundEffectCoef = array_to_float((uint8_t*)&incomingData[3 + 15 * 4]);
           groundEffectOffset = array_to_float((uint8_t*)&incomingData[3 + 16 * 4]);
 
-          Serial.println("\n PID!!! \n");
+          send_status_log(M_ID_SETTINGS_PID, M_ERROR_OK);
+          // Serial.printf("{\"type\":\"SET_LOG\",\"data\":\"PID OK\"}");
+          // Serial.println("\n PID!!! \n");
           // Serial.printf("\n xPosPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 0 * 4]), array_to_float((uint8_t*)&incomingData[3 + 1 * 4]), array_to_float((uint8_t*)&incomingData[3 + 2 * 4]));
           // Serial.printf("\n zPosPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 3 * 4]), array_to_float((uint8_t*)&incomingData[3 + 4 * 4]), array_to_float((uint8_t*)&incomingData[3 + 5 * 4]));
           // Serial.printf("\n xVelPID!!! %f %f %f\n", array_to_float((uint8_t*)&incomingData[3 + 9 * 4]), array_to_float((uint8_t*)&incomingData[3 + 10 * 4]), array_to_float((uint8_t*)&incomingData[3 + 11 * 4]));
@@ -374,14 +434,17 @@ void OnDataRecv(const uint8_t *incomingData, int len) {
           zTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 2 * 4]);
           yawTrim = (int16_t)array_to_float((uint8_t*)&incomingData[3 + 3 * 4]);
 
+          send_status_log(M_ID_SETTINGS_TRIM, M_ERROR_OK);
           // Serial.printf("\n TRIM!!! %i %i %i\n", xTrim, yTrim, zTrim);
-          Serial.println("\n TRIM!!! \n");
+          // Serial.println("\n TRIM!!! \n");
+          // Serial.printf("{\"type\":\"SET_LOG\",\"data\":\"TRIM OK\"}");
         }
-
 
         lastPing = micros();
       } else {
-        Serial.println("\n bad checksum!!! \n");
+        send_status_log(M_ID_SETTINGS_CHEKSUM, M_ERROR_GENERIC);
+        // Serial.printf("{\"type\":\"SET_LOG\",\"data\":\"SETTINGS BAD CHECKSUM!!!\"}");
+        // Serial.println("\n bad checksum!!! \n");
       }
     }
   }
@@ -622,7 +685,7 @@ void pid_loop() {
     // Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);
     // Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);   
 
-    Serial.printf("{\"data\":\"\
+    Serial.printf("{\"type\":\"PID_LOG\",\"data\":\"\
 %d,%d,%d,%d\
 ,%.2f,%.2f,%.2f,%.2f\
 ,%.2f,%.2f,%.2f\

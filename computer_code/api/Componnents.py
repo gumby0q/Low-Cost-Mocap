@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
+import serialHelpers as sH
+
 
 serial_data_header = ["xPWM", "yPWM", "zPWM", "yawPWM",
                         "xPos", "yPos", "zPos", "yawPos",
@@ -70,19 +72,27 @@ class SerialPortC(BaseComponentWrapper):
             while True:
                 if self.c.in_waiting > 0:
                     with self.serialLock:
-                        try:
-                            data = self.c.readline().decode('utf-8').rstrip()
+                        line = self.c.readline()
+                        # print("line", line)
+                        parsed_message = sH.parse_serial_log_data(line)
 
+                        if (parsed_message["type"] == "UNKNOWN") or (parsed_message["type"] == "HEADER_ERROR"):
+                            # TODO rewrite to binary protocol.... ?
                             try:
-                                json_data = json.loads(data)
-                                # print(f"json_data: {json_data['data']}")
-                                self.mediator.notify(self, "serial_data", json_data)
+                                data = line.decode('utf-8').rstrip()
 
+                                try:
+                                    json_data = json.loads(data)
+                                    # print(f"json_data: {json_data['data']}")
+                                    self.mediator.notify(self, "serial_data", json_data)
+
+                                except Exception as e:
+                                    print(f"Received: {data} {e}")
+                                
                             except Exception as e:
-                                print(f"Received: {data} {e}")
-                            
-                        except Exception as e:
-                            print(f"Error reading data: {e}")
+                                print(f"Error reading data: {e}")
+                        else:
+                            self.mediator.notify(self, "serial_status_log", parsed_message)
 
         # Create and start a thread to read serial data
         serial_thread = threading.Thread(target=read_serial_data)

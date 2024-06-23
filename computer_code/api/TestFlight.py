@@ -139,7 +139,11 @@ class TestFlightMediator(Mediator):
         elif event == "frame_parsed":
             self._processFrameParsed(sender, data)
 
+        elif event == "serial_status_log":
+            self._socketioComponent.c.emit("serial-port-log", data)
+
         # serial data >>>>
+                #     self._calculationLoopComponent.add_serial_data_row(np_data)
         elif event == "serial_data":
             if self._dataProcessorComponent.is_saving_running:
                 # print("data type ", type(data))
@@ -147,7 +151,10 @@ class TestFlightMediator(Mediator):
                 self._dataProcessorComponent.append_csv_row(string_list)
 
                 np_data = np.array(string_list).astype(np.float32)
-                self._socketioComponent.c.emit("serial-port-data", {"data": np_data.tolist() })
+
+                # type should be 'PID_LOG' there, passed from device
+                self._socketioComponent.c.emit("serial-port-data", {"type": data['type'], "data": np_data.tolist() })
+
                 # # np_data[:,ind] = np_data[:,ind].astype(np.float32)
                 # with self._calculationLoopComponent.lock:
                 #     self._calculationLoopComponent.add_serial_data_row(np_data)
