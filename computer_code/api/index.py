@@ -387,6 +387,7 @@ def determine_scale(data):
     actual_distance = 0.15
     observed_distances = []
 
+    print("determine_scale data", data)
     for object_points_i in object_points:
         if len(object_points_i) != 2:
             continue
@@ -395,9 +396,14 @@ def determine_scale(data):
 
         observed_distances.append(np.sqrt(np.sum((object_points_i[0] - object_points_i[1])**2)))
 
+    print("determine_scale observed_distances", observed_distances)
     scale_factor = actual_distance/np.mean(observed_distances)
+    print("determine_scale camera_poses 1", camera_poses)
+    print("determine_scale scale_factor", scale_factor)
     for i in range(0, len(camera_poses)):
         camera_poses[i]["t"] = (np.array(camera_poses[i]["t"]) * scale_factor).tolist()
+
+    print("determine_scale camera_poses 2", camera_poses)
 
     socketio.emit("camera-pose", {"error": None, "camera_poses": camera_poses})
 

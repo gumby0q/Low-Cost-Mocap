@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import os
 import glob
+import json
  
 cam_images_folder_name = 'cam_1'
 cam_images_folder_name_calibrated = f'{cam_images_folder_name}_c'
@@ -71,9 +72,11 @@ detected corners (imgpoints)
 ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
  
 print("Camera matrix : \n")
-print(mtx)
+# print(mtx)
+print(json.dumps(mtx.tolist()))
 print("dist : \n")
-print(dist)
+# print(dist)
+print(json.dumps(dist.tolist()))
 # print("rvecs : \n")
 # print(rvecs)
 # print("tvecs : \n")

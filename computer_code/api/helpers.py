@@ -99,7 +99,9 @@ class Cameras:
                 if self.is_capturing_points and not self.is_triangulating_points:
                     self.socketio.emit("image-points", [x[0] for x in image_points])
                 elif self.is_triangulating_points:
+                    # print('len(image_points)', len(image_points))
                     errors, object_points, frames = find_point_correspondance_and_object_points(image_points, self.camera_poses, frames)
+                    # print('len(object_points)', len(object_points))
 
                     # convert to world coordinates
                     for i, object_point in enumerate(object_points):
@@ -110,10 +112,14 @@ class Cameras:
                         new_object_point[1], new_object_point[2] = new_object_point[2], new_object_point[1]
                         object_points[i] = new_object_point
 
+                    # print('len(object_points)', len(object_points))
+
                     objects = []
                     filtered_objects = []
                     if self.is_locating_objects:
+                        # print(object_points)
                         objects = locate_objects(object_points, errors)
+                        # print(objects)
                         filtered_objects = self.kalman_filter.predict_location(objects)
                         
                         if len(filtered_objects) != 0:
@@ -446,11 +452,19 @@ def find_point_correspondance_and_object_points(image_points, camera_poses, fram
 def locate_objects(object_points, errors):
     dist1 = 0.095
     dist2 = 0.15
+    # cond_dist = 0.025
+    cond_dist = 0.015
+
+    # print('object_points', object_points)
+    # object_points = [[ 0.36384054  0.01204828 -0.03555403]
+    #                 [ 0.30178555 -0.00993919 -0.02937744]
+    #                 [ 0.39690705 -0.04379164 -0.03328124]]
 
     distance_matrix = np.zeros((object_points.shape[0], object_points.shape[0]))
     already_matched_points = []
     objects = []
 
+    # calc distance matrix
     for i in range(0, object_points.shape[0]):
         for j in range(0, object_points.shape[0]):
             distance_matrix[i,j] = np.sqrt(np.sum((object_points[i] - object_points[j])**2))
@@ -459,16 +473,26 @@ def locate_objects(object_points, errors):
         if i in already_matched_points:
             continue
         
+        # delta of specific point
         distance_deltas = np.abs(distance_matrix[i] - dist1)
-        num_matches = distance_deltas < 0.025
-        matches_index = np.where(distance_deltas < 0.025)[0]
+        # if all axes < condition. example = [true, false, false]
+        num_matches = distance_deltas < cond_dist
+        matches_index = np.where(distance_deltas < cond_dist)[0]
+        
+        # print('num_matches', num_matches, np.sum(num_matches), np.sum(num_matches) >= 2)
+        # print('matches_index', matches_index)
         if np.sum(num_matches) >= 2:
             for possible_pair in cartesian_product(matches_index, matches_index):
                 pair_distance = np.sqrt(np.sum((object_points[possible_pair[0]] - object_points[possible_pair[1]])**2))
-                
+
+                # condition1 = np.abs(pair_distance - dist2) > cond_dist
+                condition1 = np.abs(pair_distance - dist2) > cond_dist
+                # print('condition1', condition1)
                 # if the pair isnt the correct distance apart
-                if np.abs(pair_distance - dist2) > 0.025:
+                if condition1:
                     continue
+
+                # print("passed condition1", condition1)
 
                 best_match_1_i = possible_pair[0]
                 best_match_2_i = possible_pair[1]
@@ -496,6 +520,8 @@ def locate_objects(object_points, errors):
                     "error": error,
                     "droneIndex": drone_index
                 })
+
+                # print("passed break", objects)
 
                 break
     
