@@ -70,16 +70,25 @@ class SerialPortC(BaseComponentWrapper):
         # serial -----------------------------------------------------
         def read_serial_data():
             while True:
-                if self.c.in_waiting > 0:
+                bytes_num = self.c.in_waiting
+                if bytes_num > 0:
+                    # print("self.c.in_waiting")
                     with self.serialLock:
-                        line = self.c.readline()
+                        # line = self.c.readline()
+                        line = self.c.read_until(b'\r\n')
+                        # line = self.c.read(bytes_num)
                         # print("line", line)
-                        parsed_message = sH.parse_serial_log_data(line)
+
+                        # truncate '\n' character
+                        _line = line[:-2]
+                        # print("_line", _line)
+                        
+                        parsed_message = sH.parse_serial_log_data(_line)
 
                         if (parsed_message["type"] == "UNKNOWN") or (parsed_message["type"] == "HEADER_ERROR"):
                             # TODO rewrite to binary protocol.... ?
                             try:
-                                data = line.decode('utf-8').rstrip()
+                                data = _line.decode('utf-8').rstrip()
 
                                 try:
                                     json_data = json.loads(data)
@@ -93,6 +102,15 @@ class SerialPortC(BaseComponentWrapper):
                                 print(f"Error reading data: {e}")
                         else:
                             self.mediator.notify(self, "serial_status_log", parsed_message)
+                # else:
+                #     with self.serialLock:
+                #         print("NO! self.c.in_waiting")
+                #         s = self.c.read(100)
+                #         parsed_message = sH.parse_serial_log_data(s)
+                #         if (parsed_message["type"] == "UNKNOWN") or (parsed_message["type"] == "HEADER_ERROR"):
+                #             print(f"Error reading data: {s}")
+                #         else:
+                #             self.mediator.notify(self, "serial_status_log", parsed_message)
 
         # Create and start a thread to read serial data
         serial_thread = threading.Thread(target=read_serial_data)

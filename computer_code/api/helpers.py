@@ -13,7 +13,7 @@ from pseyepy import Camera
 from Singleton import Singleton
 
 
-@Singleton
+# @Singleton
 class Cameras:
     def __init__(self):
         dirname = os.path.dirname(__file__)

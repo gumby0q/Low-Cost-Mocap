@@ -1,32 +1,8 @@
-// #include <esp_now.h>
-// #include <esp_wifi.h>
-// #include <WiFi.h>
-// #include <ArduinoJson.h>
-// #include <PID_v1.h>
-// #include <stdint.h>
-// #include <EEPROM.h>
-// #include "sbus.h"
-
-
-
-
-
 // // https://github.com/kkbin505/Arduino-Transmitter-for-ELRS/blob/main/PPMtoCRSF/PPMtoCRSF.ino
 
-// // https://github.com/bolderflight/sbus/blob/main/src/sbus.cpp
-// /* -------------------------------------------------------------------------------------- */
-// /* -------------------------------------------------------------------------------------- */
-// /* -------------------------------------------------------------------------------------- */
-
-
-// #include <esp_now.h>
-// #include <esp_wifi.h>
-// #include <WiFi.h>
 #include <ArduinoJson.h>
 #include <PID_v1.h>
 #include <stdint.h>
-#include <EEPROM.h>
-
 
 
 // M5-Stick-C Version
@@ -45,6 +21,7 @@
 //  Tx       =   pin33
 //  Rx       =   pin32
 //  ButtonA  =   pin37
+#include "./messages.h"
 
 #include "CRSF.h"
 
@@ -59,15 +36,18 @@ const int ledPin1 = 10;       // internal M5Stick-C Red LED pin
 #define CRSFinterval 5000 //in us
 #define uartCRSFinverted true
 
+#define BUTTONS_TIMER_INTERVAL 1000 //in us
+#define BUTTONS_DEBOUNCE_INTERVAL 10 //in ms
+
 CRSF crsf;
 
 #define CRSF_CHANNEL_VALUE_MIN 172
 #define CRSF_CHANNEL_VALUE_MID 992
 #define CRSF_CHANNEL_VALUE_MAX 1811
 
+// ----
 hw_timer_t * timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-
 
 void IRAM_ATTR onTimer() {
   portENTER_CRITICAL_ISR(&timerMux);
@@ -84,15 +64,129 @@ void StartTimer() {
 }
 
 // ----
+
+// -------------------------------------------------------------------------------
+#define BUTTON_ALARM_PIN 34
+
+// #define SWITCH_PIN_ARM   12
+// #define BUTTON_PIN_START 13
+// #define BUTTON_PIN_STOP  14
+#define SWITCH_PIN_ARM   16
+#define BUTTON_PIN_START 17
+#define BUTTON_PIN_STOP  5
+
+// #define ENCODER_PIN_1    26
+// #define ENCODER_PIN_2    27
+
+
+// volatile uint8_t switch_arm_tmp_state = 0;
+volatile uint8_t button_start_tmp_state = 0;
+volatile uint8_t button_stop_tmp_state = 0;
+
+volatile uint8_t switch_debounce_arm_cnt = 0;
+volatile uint8_t button_debounce_start_cnt = 0;
+volatile uint8_t button_debounce_stop_cnt = 0;
+
+volatile uint8_t switch_arm_state = 0;
+volatile uint8_t button_start_cnt = 0;
+volatile uint8_t button_stop_cnt = 0;
+volatile uint8_t button_alarm_state = 0;
+
+#define ENCODER_TRIM_MAX  100
+volatile uint8_t encoder_trim_value = 10;
+
+
+/*
+
+buttons_packet[4]:
+- switch_arm_state
+- button_start_cnt
+- button_stop_cnt
+- encoder trim value
+- button_alarm_status
+*/
+
+
+// -------------------------------------------------------------------------------
+
+hw_timer_t * timer2 = NULL;
+portMUX_TYPE timer2Mux = portMUX_INITIALIZER_UNLOCKED;
+
+void IRAM_ATTR onTimer2() {
+  portENTER_CRITICAL_ISR(&timer2Mux);
+
+  // make some buttons read logic
+  uint8_t state;
+  /* ----- */
+  state = digitalRead(SWITCH_PIN_ARM);
+  if (state != (!switch_arm_state)) {
+    switch_debounce_arm_cnt = switch_debounce_arm_cnt + 1;
+    
+    if (switch_debounce_arm_cnt >= BUTTONS_DEBOUNCE_INTERVAL) {
+      switch_debounce_arm_cnt = BUTTONS_DEBOUNCE_INTERVAL;
+
+      /* pressed */
+      switch_arm_state = !state;
+    }
+  } else {
+    switch_debounce_arm_cnt = 0;
+  }
+
+  /* ----- */
+  state = digitalRead(BUTTON_PIN_START);
+  if (state != button_start_tmp_state) {
+      button_debounce_start_cnt = button_debounce_start_cnt + 1;
+
+    if (button_debounce_start_cnt >= BUTTONS_DEBOUNCE_INTERVAL-1) {
+      button_debounce_start_cnt = BUTTONS_DEBOUNCE_INTERVAL;
+      /* pressed */
+      button_start_tmp_state = state;
+      if (button_start_tmp_state == 0) {
+        button_start_cnt = button_start_cnt + 1;
+      }
+    } else {
+    }
+  } else {
+    button_debounce_start_cnt = 0;
+  }
+
+  /* ----- */
+  state = digitalRead(BUTTON_PIN_STOP);
+  if (state != button_stop_tmp_state) {
+    button_debounce_stop_cnt = button_debounce_stop_cnt + 1;
+
+    if (button_debounce_stop_cnt >= BUTTONS_DEBOUNCE_INTERVAL) {
+      button_debounce_stop_cnt = BUTTONS_DEBOUNCE_INTERVAL;
+      /* pressed */
+      button_stop_tmp_state = state;
+      if (button_stop_tmp_state == 0) {
+        button_stop_cnt = button_stop_cnt + 1;
+      }
+    } else {
+    }
+  } else {
+    button_debounce_stop_cnt = 0;
+  }
+
+  portEXIT_CRITICAL_ISR(&timer2Mux);
+}
+
+void StartTimer2() {
+  timer2 = timerBegin(1, 80, true);
+  timerAttachInterrupt(timer2, &onTimer2, true);
+  timerAlarmWrite(timer2, BUTTONS_TIMER_INTERVAL, true);
+  timerAlarmEnable(timer2);
+}
+
+
+
+// ----
 // uart buffer
 char buffer[1024];
 // ----
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
-
-#define ALARM_PIN 34
-
 #define MAX_VEL 100
 // #define ROTOR_RADIUS 0.0225
 #define ROTOR_RADIUS 0.02
@@ -110,9 +204,6 @@ uint64_t millisFromStart = 0;
 uint64_t millisFromArm = 0;
 
 #define DELAY_TO_ARM (uint64_t)(1500)
-
-// bfs::SbusTx sbus_tx(&Serial1, 33, 32, true, false);
-// bfs::SbusData data;
 
 uint16_t zBase = 173;
 
@@ -175,129 +266,10 @@ float loopFrequency = 2000.0;
 float sbusFrequency = 50.0;
 
 
-// volatile uint16_t xPWM = 992;
-// volatile uint16_t yPWM = 992;
-// volatile uint16_t zPWM = 992;
-// volatile uint16_t yawPWM = 992;
 
 // -------------------------------------------------------------------------------
 
-
 /* -------------------------------------------------------------- incoming data >>> */
-
-
-// // callback function that will be executed when data is received
-// // void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
-// void OnDataRecv(const uint8_t *incomingData, int len) {
-//   // Serial.println((char*)incomingData);
-//   DeserializationError err = deserializeJson(json, (char *)incomingData);
-
-//   // Serial.println("\n incoming packet \n");
-
-//   if (err) {
-//     Serial.print("failed to parse json");
-//     return;
-//   }
-
-//   if (json.containsKey("pos") && json.containsKey("vel")) {
-//     xPos = json["pos"][0];
-//     yPos = json["pos"][1];
-//     zPos = json["pos"][2];
-//     yawPos = json["pos"][3];
-
-//     xVel = json["vel"][0];
-//     yVel = json["vel"][1];
-//     zVel = json["vel"][2];
-//     // xVel = 0;
-//     // yVel = 0;
-//     // zVel = json["vel"][2];
-//     // Serial.println("\n json pos vel!!! \n");
-//   } else if (json.containsKey("armed")) {
-//     if (json["armed"] != armed && json["armed"]) {
-//       timeArmed = millis();
-//     }
-//     // Serial.printf("\narmed 1 %d \n", (uint8_t)armed);
-//     armed = json["armed"];
-//     // Serial.printf("\narmed 2 %d \n", (uint8_t)armed);
-//   } else if (json.containsKey("setpoint")) {
-//     xPosSetpoint = json["setpoint"][0];
-//     yPosSetpoint = json["setpoint"][1];
-//     zPosSetpoint = json["setpoint"][2];
-//     Serial.println("\n json SETPOINT!!! \n");
-//   } else if (json.containsKey("pid")) {
-//     Serial.println("\n json PID!!! \n");
-//     xPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
-//     yPosPID.SetTunings(json["pid"][0], json["pid"][1], json["pid"][2]);
-//     zPosPID.SetTunings(json["pid"][3], json["pid"][4], json["pid"][5]);
-//     yawPosPID.SetTunings(json["pid"][6], json["pid"][7], json["pid"][8]);
-
-//     xVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
-//     yVelPID.SetTunings(json["pid"][9], json["pid"][10], json["pid"][11]);
-//     zVelPID.SetTunings(json["pid"][12], json["pid"][13], json["pid"][14]);
-
-//     groundEffectCoef = json["pid"][15];
-//     groundEffectOffset = json["pid"][16];
-//   } else if (json.containsKey("trim")) {
-//     Serial.println("\n json TRIM!!! \n");
-//     xTrim = json["trim"][0];
-//     yTrim = json["trim"][1];
-//     zTrim = json["trim"][2];
-//     yawTrim = json["trim"][3];
-//   }
-
-//   lastPing = micros();
-
-// }
-
-
-#define M_HEADER_0 0xba
-#define M_HEADER_1 0xcc
-
-
-// Error codes
-#define M_ERROR_OK 0x00
-#define M_ERROR_GENERIC 0x01
-
-
-#define M_ID_SETTINGS_CHEKSUM 200
-// #define M_ID_SETTINGS_POS_VEL    201  // sending countinuosly
-// #define M_ID_SETTINGS_ARMED      202  // sending countinuosly
-// #define M_ID_SETTINGS_SETPOINT   203  // sending countinuosly
-#define M_ID_SETTINGS_PID        204
-#define M_ID_SETTINGS_TRIM       205
-
-#define M_ID_POS_VEL    0x01
-#define M_ID_ARMED      0x02
-#define M_ID_SETPOINT   0x03
-#define M_ID_PID        0x04
-#define M_ID_TRIM       0x05
-
-
-// Define the polynomial for CRC-8
-#define POLYNOMIAL 0x07
-
-
-
-
-// Function to compute the CRC-8 checksum
-uint8_t crc8(const uint8_t *data, size_t length) {
-    uint8_t crc = 0x00; // Initial value
-
-    for (size_t i = 0; i < length; i++) {
-        crc ^= data[i]; // XOR the data byte with the CRC
-
-        for (uint8_t j = 0; j < 8; j++) {
-            if (crc & 0x80) {
-                crc = (crc << 1) ^ POLYNOMIAL; // Shift left and XOR with the polynomial
-            } else {
-                crc <<= 1; // Just shift left
-            }
-        }
-    }
-
-    return crc;
-}
-
 
 // Function to pack and send data
 // void send_status_log(uint8_t message_id, const float *data, size_t data_len, uint8_t error_code) {
@@ -324,39 +296,41 @@ void send_status_log(uint8_t message_id, uint8_t error_code) {
     // Calculate and add CRC-8 checksum
     uint8_t checksum = crc8(buffer, pos);
     buffer[pos++] = checksum;
+    buffer[pos++] = '\r'; /* for transfer parsing.... */
+    buffer[pos++] = '\n'; /* for transfer parsing.... */
 
     // Send the buffer via Serial
     Serial.write(buffer, pos);
 }
 
-// Function to convert an array of uint8_t to a float
-// float array_to_float(uint8_t *buff) {
-//     // Pointer to float that points to the same memory location as the input buffer
-//     float result;
-//     uint8_t *floatPointer = (uint8_t *)&result;
+void send_data_array(uint8_t message_id, uint8_t * data, uint8_t data_length) {
+    uint8_t buffer[64];
+    uint8_t pos = 0;
 
-//     // Serial.printf("\n");
-//     // Copy the bytes from the buffer to the float variable
-//     for (int i = 0; i < 4; i++) {
-//         floatPointer[i] = buff[i];
-//         // Serial.printf("\n buff %d \n", buff[i]);
-//     }
-//     // Serial.printf("\n result %f \n", result);
+    // Add headers
+    buffer[pos++] = M_HEADER_0;
+    buffer[pos++] = M_HEADER_1;
+    
+    // Add message ID
+    buffer[pos++] = message_id;
 
-//     return result;
-// }
+    // memcpy(&buffer[pos], data, data_length);
+    for (uint8_t i = 0; i < data_length; i++) {
+      buffer[pos + i] = data[i];
+    }
+    pos = pos + data_length;
 
-float array_to_float(const uint8_t *buff) {
-    uint32_t as_int = ((uint32_t)buff[0]) |
-                      ((uint32_t)buff[1] << 8) |
-                      ((uint32_t)buff[2] << 16) |
-                      ((uint32_t)buff[3] << 24);
-
-    return *((float*)&as_int);
+    // Calculate and add CRC-8 checksum
+    uint8_t checksum = crc8(buffer, pos);
+    buffer[pos++] = checksum;
+    buffer[pos++] = '\r'; /* for transfer parsing.... */
+    buffer[pos++] = '\n'; /* for transfer parsing.... */
+    // Serial.printf("pos %d data_length %d\n", pos, data_length);
+    // Send the buffer via Serial
+    Serial.write(buffer, pos);
 }
 
 // callback function that will be executed when data is received
-
 void OnDataRecv(const uint8_t *incomingData, int len) {
   if (incomingData[0] == M_HEADER_0) {
     if (incomingData[1] == M_HEADER_1) {
@@ -458,29 +432,7 @@ void resetPid(PID &pid, double min, double max) {
   pid.SetOutputLimits(min, max);
 }
 
-
 void pid_setup() {
-  // Initialize Serial Monitor
-  // Serial.begin(115200);
-
-  // sbus_tx.Begin();
-  // data.failsafe = false;
-  // data.ch17 = true;
-  // data.ch18 = true;
-  // data.lost_frame = false;
-
-  // for (int j = 0; j < 16; j++) {
-  //   data.ch[j] = 173;
-  // }
-
-  // data.ch[0] = 992;
-  // data.ch[1] = 992;
-  // data.ch[2] = 173;
-  // data.ch[3] = 992;
-
-  // sbus_tx.data(data);
-  // sbus_tx.Write();
-
   xPosPID.SetMode(AUTOMATIC);
   yPosPID.SetMode(AUTOMATIC);
   zPosPID.SetMode(AUTOMATIC);
@@ -506,13 +458,7 @@ void pid_setup() {
   yVelPID.SetOutputLimits(-1, 1);
   zVelPID.SetOutputLimits(-1, 1);
 
-  EEPROM.begin(EEPROM_SIZE);
-
-  // xTrim = EEPROM.read(0);
-  // yTrim = EEPROM.read(1);
-  // zTrim = EEPROM.read(2);
-  // yawTrim = EEPROM.read(3);
- //------
+  //------
   lastPing = micros();
   lastLoopTime = micros();
   lastSbusSend = micros();
@@ -524,24 +470,6 @@ void pid_setup() {
 void input_data_loop() {
   int availableBytes = Serial.available();
   if (availableBytes) {
-    // int droneIndex = Serial.read() - '0';
-    // Serial.readBytes(buffer, availableBytes-1);
-    // buffer[availableBytes-1] = '\0';
-
-    // // Serial.printf("\n drone index %d: ", droneIndex);
-    // // Serial.print(buffer);
-
-    // // esp_err_t result = esp_now_send(broadcastAddresses[droneIndex], (uint8_t *)&buffer, strlen(buffer) + 1);
-    // // if (result) {
-    // //   Serial.println(esp_err_to_name(result));
-    // // } else {
-    // //   digitalWrite(2, !digitalRead(2));
-    // // }
-
-    // // need to parse data and what?
-    // OnDataRecv((uint8_t *)&buffer, strlen(buffer) + 1);
-
-
     Serial.readBytes(buffer, availableBytes);
     OnDataRecv((uint8_t *)&buffer, availableBytes);
 
@@ -552,6 +480,7 @@ void input_data_loop() {
 }
 
 uint32_t max_t_diff = 0;
+
 void pid_loop() {
   while (micros() - lastLoopTime < 1e6 / loopFrequency) {
     // yield();
@@ -570,21 +499,30 @@ void pid_loop() {
 
   bool local_armed = armed;
 
-  int alarm = digitalRead(ALARM_PIN);
-
-  if (alarm != 0) {
+  if (button_alarm_state != 0) {
     local_armed = false;
   }
+  // int alarm = digitalRead(ALARM_PIN);
+  // if (alarm != 0) {
+  //   local_armed = false;
+  // }
 
   if (local_armed) {
     // data.ch[4] = 1812;
-    crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MAX;      //  CH 4 throttle
+    crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MAX;      //  CH 4 arm
+    // angle on
+    crsf.PackedRCdataOut.ch5 = CRSF_CHANNEL_VALUE_MAX;  //  CH 5 AUX 2
+
   } else {
     /* reset if not armed */
     millisFromArm = micros()/1000;
 
     // data.ch[4] = 172;
-    crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MIN;      //  CH 4 throttle
+    crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MIN;      //  CH 4 arm
+    // angle off
+    crsf.PackedRCdataOut.ch5 = CRSF_CHANNEL_VALUE_MIN;      //  CH 5 AUX 2 
+
+
     resetPid(xPosPID, -MAX_VEL, MAX_VEL);
     resetPid(yPosPID, -MAX_VEL, MAX_VEL);
     resetPid(zPosPID, -MAX_VEL, MAX_VEL);
@@ -594,10 +532,11 @@ void pid_loop() {
     resetPid(zVelPID, -1, 1);
   }
 
+  /* todo: rewrite to statemachine */
   if ((micros()/1000 - millisFromArm) > /* delay*/ 1000) {
-    zBase = 992;
+    zBase = CRSF_CHANNEL_VALUE_MID;
   } else {
-    zBase = 173;
+    zBase = CRSF_CHANNEL_VALUE_MIN;
   }
 
 
@@ -610,69 +549,43 @@ void pid_loop() {
   yVelPID.Compute();
   zVelPID.Compute();
 
-  int xPWM = 992 + (xVelOutput * 811) + xTrim;
-  int yPWM = 992 + (-yVelOutput * 811) + yTrim;
-    
-  // int xPWM = 992 /* + (xVelSetpoint * 811) */ + xTrim;
+  int xPWM = CRSF_CHANNEL_VALUE_MID + (xVelOutput * 811) + xTrim;
+  int yPWM = CRSF_CHANNEL_VALUE_MID + (-yVelOutput * 811) + yTrim;
 
-  // int xPWM = 992 + (xVelSetpoint * 811) + xTrim;
-  // int yPWM = 992 + (-yVelSetpoint * 811) + yTrim;
   int16_t zPWMshift = (Z_GAIN * zVelOutput * 811);
   int zPWM = zBase + zPWMshift + zTrim;
-  int yawPWM = 992 + (yawPosOutput * 811) + yawTrim;
+  
+  int yawPWM = CRSF_CHANNEL_VALUE_MID + (yawPosOutput * 811) + yawTrim;
+
+  /* todo: check if it works right? */
   double groundEffectMultiplier = 1 - groundEffectCoef*pow(((2*ROTOR_RADIUS) / (4*(zPos-groundEffectOffset))), 2);
-  // zPWM *= max(0., groundEffectMultiplier);
+  
   int _zPWM = zPWM * max(0., groundEffectMultiplier);
 
-  if (zPWM < 173) {
-    zPWM = 173;
+  /* trim value */
+  if (zPWM < CRSF_CHANNEL_VALUE_MIN) {
+    zPWM = CRSF_CHANNEL_VALUE_MIN;
+  } else if (zPWM > CRSF_CHANNEL_VALUE_MAX) {
+    zPWM = CRSF_CHANNEL_VALUE_MAX;
   }
-
-  // data.ch[0] = -yPWM;
-  // data.ch[1] = xPWM;
-  // data.ch[2] = zPWM;
-  // data.ch[3] = yawPWM;
 
   if ((micros()/1000 - millisFromArm) > /* delay*/ 1000) {
-    // zPWM = 992;
+
   } else {
-    zPWM = 173;
+    zPWM = CRSF_CHANNEL_VALUE_MIN;
   }
 
-  // data.ch[0] = yPWM;
-  // data.ch[1] = xPWM;
-  // data.ch[2] = zPWM;
-  // data.ch[3] = yawPWM;
   crsf.PackedRCdataOut.ch0 = yPWM;      //  CH 0 ROLL
   crsf.PackedRCdataOut.ch1 = xPWM;      //  CH 1 PITCH
   crsf.PackedRCdataOut.ch2 = zPWM;      //  CH 2 THROTTLE
   crsf.PackedRCdataOut.ch3 = yawPWM;      //  CH 3 YAW
   
-  // angle on
-  crsf.PackedRCdataOut.ch5 = CRSF_CHANNEL_VALUE_MAX;      //  CH 5 AUX 2 
-
-  // my hack test <<
+  // my hack test >>
   // crsf.PackedRCdataOut.ch0 = CRSF_CHANNEL_VALUE_MID;      //  CH 0 ROLL
   // crsf.PackedRCdataOut.ch1 = CRSF_CHANNEL_VALUE_MID;      //  CH 1 PITCH
   // crsf.PackedRCdataOut.ch2 = CRSF_CHANNEL_VALUE_MIN;      //  CH 2 THROTTLE
   // crsf.PackedRCdataOut.ch3 = CRSF_CHANNEL_VALUE_MID;      //  CH 3 YAW
 
-  // data.ch[0] = 992;
-  // data.ch[1] = 992;
-  // data.ch[2] = 173; // trottle
-  // data.ch[3] = 992;
-  // data.ch[4] = 173; // arm
-  // data.ch[5] = 173; // angle off
-  // data.ch[5] = 1811; // angle on
-  // if ((micros()/1000 - millisFromStart) > DELAY_TO_ARM) {
-  //   data.ch[4] = 1811;
-  // }
-
-  // my hack test <<
-
-
-  // if ((micros() - lastPrint) > /* us */ (500 * 1000)) {
-  // if ((micros() - lastPrint) > /* us */ (100 * 1000)) {
   if ((micros() - lastPrint) > /* us */ (200 * 1000)) {
     lastPrint = micros();
     if (local_armed) {
@@ -681,8 +594,6 @@ void pid_loop() {
     } else {
       // Serial.printf("\narmed 3 no  %d\n", (uint8_t)armed);
     }
-
-    // Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);
     // Serial.printf("xPWM %d yPWM %d zPWM %d yawPWM %d\n", xPWM, yPWM, zPWM, yawPWM);   
 
     Serial.printf("{\"type\":\"PID_LOG\",\"data\":\"\
@@ -691,7 +602,7 @@ void pid_loop() {
 ,%.2f,%.2f,%.2f\
 ,%.2f,%.2f,%.2f,%.2f\
 ,%.2f,%u,%u,%u\
-\"}\n",
+\"}\r\n",
       xPWM, yPWM, zPWM, yawPWM,
       xPos, yPos, zPos, yawPos,
       xVelSetpoint, yVelSetpoint, zVelSetpoint,
@@ -700,52 +611,26 @@ void pid_loop() {
     );
   }
 
-
-  if (micros() - lastSbusSend > 1e6 / sbusFrequency) {
-    lastSbusSend = micros();
-    // Serial.printf("PWM x: %d, y: %d, z: %d, yaw: %d\nPos x: %f, y: %f, z: %f, yaw: %f\n", xPWM, yPWM, zPWM, yawPWM, xVel, yVel, zPos, yawPos);
-    // Serial.printf("Setpoint x: %f, y: %f, z: %f\n", xVelSetpoint, yVelSetpoint, zVelSetpoint);
-    // Serial.printf("Pos x: %f, y: %f, z: %f\n", xVel, yVel, zPos);
-    //Serial.printf("Output x: %f, y: %f, z: %f\n", xVelOutput, yVelOutput, zVelOutput);
-    // sbus_tx.data(data);
-    // sbus_tx.Write();
-
-    // crsf.PackedRCdataOut.ch0 = CRSF_CHANNEL_VALUE_MID;      //  CH 0 ROLL
-    // crsf.PackedRCdataOut.ch1 = CRSF_CHANNEL_VALUE_MID;      //  CH 1 PITCH
-    // crsf.PackedRCdataOut.ch2 = CRSF_CHANNEL_VALUE_MIN;      //  CH 2 THROTTLE
-    // crsf.PackedRCdataOut.ch3 = CRSF_CHANNEL_VALUE_MID;      //  CH 3 YAW
-    
-    // crsf.PackedRCdataOut.ch5 = CRSF_CHANNEL_VALUE_MAX;      //  CH 5 AUX 2
-    // // crsf.PackedRCdataOut.ch6 = CRSF_CHANNEL_VALUE_MAX;      //  CH 6 AUX 3
-    // // crsf.PackedRCdataOut.ch7 = CRSF_CHANNEL_VALUE_MIN;      //  CH 7 AUX 4
-    // // crsf.PackedRCdataOut.ch8 = CRSF_CHANNEL_VALUE_MAX;      //  CH 8 AUX 5
-
-    if ((micros() / 1000 - millisFromStart) > DELAY_TO_ARM)
-    {
-      // data.ch[4] = 1811;
-      // armed = true;
-      // crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MAX;      //  CH 3 YAW
-    }
-    if ((micros() / 1000 - millisFromStart) > DELAY_TO_ARM + 2000)
-    {
-      // data.ch[4] = 1811;
-      // crsf.PackedRCdataOut.ch2 = CRSF_CHANNEL_VALUE_MIN + 100;      //  CH 3 YAW
-    }
-  }
+  // if (micros() - lastSbusSend > 1e6 / sbusFrequency) {
+  //   if ((micros() / 1000 - millisFromStart) > DELAY_TO_ARM + 2000)
+  //   {
+  //     // data.ch[4] = 1811;
+  //     // crsf.PackedRCdataOut.ch2 = CRSF_CHANNEL_VALUE_MIN + 100;      //  CH 3 YAW
+  //   }
+  //}
 }
-
 
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
 void setup() {
-  
   // Init Serial Monitor
   // Serial.begin(1000000);
-  Serial.begin(250000);
   // Serial.begin(500000);
+  Serial.begin(250000);
 
+  // --------------------------------
   // csrf
   crsf.Begin();  
   crsf.PackedRCdataOut.ch0 = CRSF_CHANNEL_VALUE_MIN;
@@ -755,24 +640,51 @@ void setup() {
   crsf.PackedRCdataOut.ch4 = CRSF_CHANNEL_VALUE_MIN;
   crsf.sendRCFrameToFC();
 
-  StartTimer();
-
   // --------------------------------
+  StartTimer();  /* crsf */
+  StartTimer2(); /* buttons */
+  // --------------------------------
+  
   pid_setup();
 
-  /* led for indicating transmition */
-  pinMode(2, OUTPUT);
-  pinMode(ALARM_PIN, INPUT);
+  // --------------------------------
+  pinMode(2, OUTPUT); /* led for indicating transmition */
+  
+  /* buttons */
+  pinMode(BUTTON_ALARM_PIN, INPUT);
+  pinMode(SWITCH_PIN_ARM, INPUT);
+  pinMode(BUTTON_PIN_START, INPUT);
+  pinMode(BUTTON_PIN_STOP, INPUT);
 
   Serial.println("setup finish");
 }
 
+uint64_t last_controls_send = 0;
+
 void loop() {
+  /* buttons start... */
+  button_alarm_state = digitalRead(BUTTON_ALARM_PIN);
+  
+  uint64_t current_ms = millis();
+  if ((current_ms - last_controls_send) > /* ms */ (100)) {
+    last_controls_send = current_ms;
+
+    // - switch_arm_state
+    // - button_start_cnt
+    // - button_stop_cnt
+    // - encoder trim value
+    uint8_t data[5];
+    data[0] = switch_arm_state;
+    data[1] = button_start_cnt;
+    data[2] = button_stop_cnt;
+    data[3] = encoder_trim_value;
+    data[4] = button_alarm_state;
+
+    send_data_array(M_ID_CONTROLS_STATE, data, 5);
+  }
+  /* buttons ...end */
+  
   pid_loop();
   input_data_loop();
-//  Betaflight AETR1234 
-//  CRSF_CHANNEL_VALUE_MIN
-//  CRSF_CHANNEL_VALUE_MID
-//  CRSF_CHANNEL_VALUE_MAX
 }
 

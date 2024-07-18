@@ -11,6 +11,14 @@ M_ID_SETPOINT = 0x03
 M_ID_PID = 0x04
 M_ID_TRIM = 0x05
 
+# buttons
+M_ID_CONTROLS_STATE = 0x40
+# - switch_arm_state    uint8_t
+# - button_start_cnt    uint8_t
+# - button_stop_cnt     uint8_t
+# - encoder trim value  uint8_t
+# - button_alarm_state  uint8_t
+
 M_ID_SETTINGS_CHEKSUM =     200
 # M_ID_SETTINGS_POS_VEL  =    201  # sending countinuosly
 # M_ID_SETTINGS_ARMED  =      202  # sending countinuosly
@@ -54,53 +62,6 @@ def pack_floats_with_crc8(floats, message_id):
 
 def bytes_to_hex_string(byte_array):
     return ' '.join(f'{byte:02X}' for byte in byte_array)
-
-
-
-# import struct
-
-# M_HEADER_0 = 0xBA
-# M_HEADER_1 = 0xCC
-
-# def crc8(data):
-#     POLYNOMIAL = 0x07
-#     crc = 0x00
-
-#     for byte in data:
-#         crc ^= byte
-
-#         for _ in range(8):
-#             if crc & 0x80:
-#                 crc = (crc << 1) ^ POLYNOMIAL
-#             else:
-#                 crc <<= 1
-
-#             crc &= 0xFF  # Ensure CRC remains an 8-bit value
-
-#     return crc
-
-
-# def pack_floats():
-
-# def pack_data_for_serial(message_id, float_data, armed=None):
-#     # Create a byte array with the headers and message ID
-#     byte_array = bytearray([M_HEADER_0, M_HEADER_1, message_id])
-    
-#     # Pack the float data into the byte array
-#     for f in float_data:
-#         byte_array.extend(struct.pack('<f', f))  # '<f' for little-endian float
-
-#     # If the message is M_ID_ARMED, append the armed status
-#     if message_id == M_ID_ARMED and armed is not None:
-#         byte_array.append(armed)
-
-#     # Calculate the CRC-8 checksum
-#     checksum = crc8(byte_array)
-
-#     # Append the checksum to the byte array
-#     byte_array.append(checksum)
-
-#     return byte_array
 
 
 def pack_floats_data_for_serial(message_id, float_data):
@@ -154,19 +115,23 @@ def crc_index_by_id(id):
     if is_present:
         return 4
 
+    if id is M_ID_CONTROLS_STATE:
+        return 8
+
     return 0
 
 
 def parse_serial_log_data(data):
-    if len(data) < 6:  # Minimum length with no payload
-        return {"type": "HEADER_ERROR", "data": "Invalid length"}
-
     if data[0] != M_HEADER_0 or data[1] != M_HEADER_1:
         return {"type": "HEADER_ERROR", "data": "Invalid header"}
 
     message_id = data[2]
 
     checksum_index = crc_index_by_id(message_id)
+
+    if len(data) < (checksum_index + 1):  # Minimum length with no payload
+        return {"type": "HEADER_ERROR", "data": "Invalid length"}
+
     checksum = data[checksum_index]
 
     calculated_checksum = crc8(data[:checksum_index])
@@ -203,6 +168,19 @@ def parse_serial_log_data(data):
     elif message_id == M_ID_SETTINGS_TRIM:
         message_lable = "TRIM"
         return make_dict_error(message_lable, error_code)
+        
+    elif message_id == M_ID_CONTROLS_STATE:
+        # message_lable = "TRIM"
+        
+        # Slice the array to start from the fourth byte
+        relevant_data = data[3:crc_index_by_id(message_id)]
+        # print(relevant_data)
+        # Unpack the data
+        switch_arm_state, button_start_cnt, button_stop_cnt, encoder_trim_value, button_alarm_state = struct.unpack('BBBBB', relevant_data)
+        # print("switch_arm_state, button_start_cnt, button_stop_cnt, encoder_trim_value, button_alarm_state")
+        # print(switch_arm_state, button_start_cnt, button_stop_cnt, encoder_trim_value, button_alarm_state)
+        
+        return {"type": "CONTROLS", "data": [switch_arm_state, button_start_cnt, button_stop_cnt, encoder_trim_value, button_alarm_state] }
         
 
     # Add more message ID handling as needed

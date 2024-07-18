@@ -290,7 +290,9 @@ const OpenNewWindow = ({ innerComponent, label }) => {
   };
 
   return (
-    <div>
+    <div
+      style={{marginLeft: 10}}
+    >
       <button onClick={openNewWindow}>{label}</button>
     </div>
   );

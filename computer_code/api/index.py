@@ -1,5 +1,5 @@
 from helpers import camera_pose_to_serializable, calculate_reprojection_errors, bundle_adjustment, Cameras, triangulate_points
-from KalmanFilter import KalmanFilter
+# from KalmanFilter import KalmanFilter
 
 from flask import Flask, Response, request
 import cv2 as cv
@@ -18,8 +18,8 @@ import json
 
 from TestFlight import TestFlightBaseComponent, TestFlightMediator
 import serialHelpers as sH
-import csv
-from datetime import datetime
+# import csv
+# from datetime import datetime
 from Componnents import CalculationLoopC, CamerasC, SerialPortC, SocketIOC, DataProcessor
 
 
@@ -34,7 +34,8 @@ serial_port_path = "/dev/ttyUSB0"
 # serial_port_speed = 230400
 # serial_port_speed = 115200
 
-ser = serial.Serial(serial_port_path, serial_port_speed, write_timeout=1, )
+# ser = serial.Serial(serial_port_path, serial_port_speed, write_timeout=1, timeout=10)
+ser = serial.Serial(serial_port_path, serial_port_speed, write_timeout=1, timeout=None)
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -53,8 +54,45 @@ num_objects = 1
 # zPWM = json["pwm"][2];
 # yawPWM = json["pwm"][3];
 
-cameras = Cameras.instance()
-camerasC = CamerasC(cameras)
+# cameras = Cameras.instance()
+# camerasC = CamerasC(cameras)
+class FakeCam:
+    def __init__(self):
+        # self.num_cameras = len(self.cameras.exposure)
+        self.num_cameras = 3
+        # print(self.num_cameras)
+        # print(self.cameras.)
+
+        self.is_capturing_points = False
+
+        self.is_triangulating_points = False
+        self.camera_poses = None
+
+        self.is_locating_objects = False
+
+        self.to_world_coords_matrix = None
+
+        self.drone_armed = []
+
+        self.num_objects = None
+
+        self.kalman_filter = None
+
+        self.socketio = None
+        self.ser = None
+
+        self.serialLock = None
+
+        # refactoring >>>
+        self.parentComponent = None 
+        # refactoring <<<
+
+        global cameras_init
+        cameras_init = True
+
+localCameras = FakeCam()
+
+camerasC = CamerasC(localCameras)
 serialPortC = SerialPortC(ser, serialLock)
 socketioC = SocketIOC(socketio)
 calculationLoopC = CalculationLoopC()
@@ -168,7 +206,8 @@ def arm_drone(data):
         return
     
     # print("drone ", data)
-    Cameras.instance().drone_armed = data["droneArmed"]
+    # Cameras.instance().drone_armed = data["droneArmed"]
+    localCameras.drone_armed = data["droneArmed"]
     # for droneIndex in range(0, num_objects):
     #     armed_status = data["droneArmed"][droneIndex]
     #     serial_data = {
@@ -250,7 +289,7 @@ def arm_drone(data):
 
 @socketio.on("acquire-floor")
 def acquire_floor(data):
-    cameras = Cameras.instance()
+    cameras = localCameras
     object_points = data["objectPoints"]
     object_points = np.array([item for sublist in object_points for item in sublist])
 
@@ -289,7 +328,7 @@ def acquire_floor(data):
 
 @socketio.on("set-origin")
 def set_origin(data):
-    cameras = Cameras.instance()
+    cameras = localCameras
     object_point = np.array(data["objectPoint"])
     to_world_coords_matrix = np.array(data["toWorldCoordsMatrix"])
     transform_matrix = np.eye(4)
@@ -304,14 +343,14 @@ def set_origin(data):
 
 @socketio.on("update-camera-settings")
 def change_camera_settings(data):
-    cameras = Cameras.instance()
+    cameras = localCameras
     
     cameras.edit_settings(data["exposure"], data["gain"])
 
 @socketio.on("capture-points")
 def capture_points(data):
     start_or_stop = data["startOrStop"]
-    cameras = Cameras.instance()
+    cameras = localCameras
 
     if (start_or_stop == "start"):
         cameras.start_capturing_points()
@@ -321,7 +360,8 @@ def capture_points(data):
 
 @socketio.on("calculate-camera-pose")
 def calculate_camera_pose(data):
-    cameras = Cameras.instance()
+    # cameras = Cameras.instance()
+    cameras = localCameras
     image_points = np.array(data["cameraPoints"])
     image_points_t = image_points.transpose((1, 0, 2))
 
@@ -371,7 +411,7 @@ def calculate_camera_pose(data):
 
 @socketio.on("locate-objects")
 def start_or_stop_locating_objects(data):
-    cameras = Cameras.instance()
+    cameras = localCameras
     start_or_stop = data["startOrStop"]
 
     if (start_or_stop == "start"):
@@ -410,7 +450,8 @@ def determine_scale(data):
 
 @socketio.on("triangulate-points")
 def live_mocap(data):
-    cameras = Cameras.instance()
+    # cameras = Cameras.instance()
+    cameras = localCameras
     start_or_stop = data["startOrStop"]
     camera_poses = data["cameraPoses"]
     cameras.to_world_coords_matrix = data["toWorldCoordsMatrix"]
@@ -427,3 +468,4 @@ if __name__ == '__main__':
     tfMediator.start()
     # use_reloader=False prevents loop start twice
     socketio.run(app, port=3001, debug=True, use_reloader=False)
+
